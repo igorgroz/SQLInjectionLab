@@ -1,16 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import SecureUsersPage from './pages/SecureUsersPage'; // Import the SecureUsersPage
+import SecureUsersRESTPage from './pages/SecureUsersRESTPage'; // Import the SecureUsersRESTPage
+import SecureUsersGraphQLPage from './pages/SecureUsersGraphQLPage'; // Import the SecureUsersGraphQLPage
 import SecureUserDetailsPage from './pages/SecureUserDetailsPage'; // Import the SecureUserDetailsPage
+import SecureUserClothingPage from './pages/SecureUserClothingPage'; // Import the new page
 
 // Define basic pages with static content
-const Home = () => (
-  <div>
-    <h1>Welcome to the Home Page</h1>
-    <p>This is the main page with some static content.</p>
-  </div>
-);
-
 const About = () => (
   <div>
     <h1>About Us</h1>
@@ -25,12 +20,17 @@ const Contact = () => (
   </div>
 );
 
-const App = () => {
-  const [userId, setUserId] = useState(''); // State for storing the user ID input
+const Home = () => (
+  <div>
+    <p>This is the main page with some static content.</p>
+  </div>
+);
 
+const App = () => {
   return (
     <Router>
       <div>
+        <h1>API Security Testing</h1>
         <nav>
           <ul>
             <li>
@@ -43,31 +43,25 @@ const App = () => {
               <Link to="/contact">Contact</Link>
             </li>
             <li>
-              <Link to="/secure-users">Secure Users</Link> {/* Link to the new page */}
+              <Link to="/secure-users-rest">Secure Users (REST)</Link> {/* Link to REST Page */}
+            </li>
+            <li>
+              <Link to="/secure-users-graphql">Secure Users (GraphQL)</Link> {/* Link to GraphQL Page */}
+            </li>
+            <li>
+              <Link to="/secure-user-clothing">Secure User Clothing</Link> {/* Link to Secure User Clothing Page */}
             </li>
           </ul>
         </nav>
-
-        <div>
-          <h2>Enter User ID for Secure User Details</h2>
-          <input
-            type="number"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder="Enter User ID"
-          />
-          {/* Link that passes userId as a parameter */}
-          <Link to={`/secure-user-details/${userId}`}>
-            <button>Go to User Details</button>
-          </Link>
-        </div>
 
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/secure-users" element={<SecureUsersPage />} /> {/* Add route for SecureUsersPage */}
+          <Route path="/secure-users-rest" element={<SecureUsersRESTPage />} /> {/* Add route for REST Page */}
+          <Route path="/secure-users-graphql" element={<SecureUsersGraphQLPage />} /> {/* Add route for GraphQL Page */}
           <Route path="/secure-user-details/:userid" element={<SecureUserDetailsPage />} /> {/* Add route for SecureUserDetailsPage */}
+          <Route path="/secure-user-clothing" element={<SecureUserClothingPage />} /> {/* Add route for SecureUserClothingPage */}
         </Routes>
       </div>
     </Router>

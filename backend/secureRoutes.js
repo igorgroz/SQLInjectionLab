@@ -12,8 +12,24 @@ router.get("/safe-users", async (req, res) => {
   }
 });
 
+// Secure GET endpoint to retrieve a specific user by ID
+router.get("/safe-users/:userid", async (req, res) => {
+  const { userid } = req.params;
 
-// Secure GET method to obtain user  clothes
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: `User with ID ${userid} not found` });
+    }
+
+    res.json({ message: "User retrieved successfully", user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Secure GET method to obtain user clothes
 router.get("/safe-users/:userid/clothes", async (req, res) => {
     const { userid } = req.params;
   
