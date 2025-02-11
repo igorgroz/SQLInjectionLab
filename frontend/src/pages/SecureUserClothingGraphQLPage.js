@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const SecureUserClothingPage = () => {
+const SecureUserClothingGraphQLPage = () => {
   const [userId, setUserId] = useState(''); // State for storing the user ID input
 
   return (
     <div>
-      <h2>Enter User ID for Secure User Details</h2>
+      <h2>Retrieve User Details via Secured GraphQL</h2>
       <input
         type="number"
         value={userId}
@@ -15,10 +15,10 @@ const SecureUserClothingPage = () => {
       />
       {/* Link that passes userId as a parameter */}
       <Link to={`/secure-user-details/${userId}`}>
-        <button>Go to User Details</button>
+        <button>Go to User Details(GraphQL)</button>
       </Link>
     </div>
   );
 };
 
-export default SecureUserClothingPage;
+export default SecureUserClothingGraphQLPage;

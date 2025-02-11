@@ -1,0 +1,32 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const REST_API_URL = 'http://localhost:5001/api/safe-users'; // Secure REST API URL
+
+const SecureUsersRESTPage = () => {
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    // Fetch users using REST API
+    axios.get(REST_API_URL)
+      .then((response) => {
+        setUsers(response.data.users);
+      })
+      .catch((error) => console.error('Error fetching users from REST API:', error));
+  }, []);
+
+  return (
+    <div>
+      <h1>Secure Users (REST)</h1>
+      <h2>Users from REST API</h2>
+      <p>API Endpoint: <span style={{ color: 'blue', fontStyle: 'italic', fontWeight: 'bold' }}>{REST_API_URL}</span></p> {/* Printout of the API endpoint */}
+      <ul>
+        {users.map((user) => (
+          <li key={user.userid}>{user.userid} {user.name} {user.surname}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default SecureUsersRESTPage;
