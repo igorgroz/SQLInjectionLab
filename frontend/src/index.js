@@ -3,10 +3,11 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
+import config from './config'; // Import the config file
 
-// Set up Apollo Client
+// Set up Apollo Client with the secure endpoint from config.js
 const client = new ApolloClient({
-  uri: 'http://localhost:5001/graphql-secure', // Your GraphQL endpoint
+  uri: config.GRAPHQL_ENDPOINT, // Use the endpoint from the config file
   cache: new InMemoryCache()
 });
 

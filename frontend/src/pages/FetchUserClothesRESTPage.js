@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const SecureUserClothingRESTPage = () => {
+const FetchUserClothesRESTPage = () => {
   const [userId, setUserId] = useState(''); // State for storing the user ID input
 
   return (
@@ -14,11 +14,11 @@ const SecureUserClothingRESTPage = () => {
         placeholder="Enter User ID"
       />
       {/* Link that passes userId as a parameter */}
-      <Link to={`/secure-user-details/${userId}`}>
+      <Link to={`/secure-user-details-rest/${userId}`}>
         <button>Go to User Details (REST)</button>
       </Link>
     </div>
   );
 };
 
-export default SecureUserClothingRESTPage;
+export default FetchUserClothesRESTPage;

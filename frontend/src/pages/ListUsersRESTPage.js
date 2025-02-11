@@ -15,7 +15,7 @@ const GET_SAFE_USERS = gql`
   }
 `;
 
-const SecureUsersPage = () => {
+const ListUsersRESTPage = () => {
   const [users, setUsers] = useState([]);
   const { data: graphQLData, loading: graphQLLoading, error: graphQLError } = useQuery(GET_SAFE_USERS);
 
@@ -51,4 +51,4 @@ const SecureUsersPage = () => {
   );
 };
 
-export default SecureUsersPage;
+export default ListUsersRESTPage;

@@ -1,30 +1,34 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import SecureUsersRESTPage from './pages/SecureUsersRESTPage'; // Import the SecureUsersRESTPage
-import SecureUsersGraphQLPage from './pages/SecureUsersGraphQLPage'; // Import the SecureUsersGraphQLPage
-import SecureUserDetailsPage from './pages/SecureUserDetailsPage'; // Import the SecureUserDetailsPage
-import SecureUserClothingPage from './pages/SecureUserClothingPage'; // Import the new page
-import SecureUserClothingRESTPage from './pages/SecureUserClothingRESTPage'; // Import the new page
-import SecureUserClothingGraphQLPage from './pages/SecureUserClothingGraphQLPage'; // Import the new page
+import ListUsersRESTPage from './pages/ListUsersRESTPage'; // Import the SecureUsersRESTPage
+import ListUsersGraphQLPage from './pages/ListUsersGraphQLPage'; // Import the SecureUsersGraphQLPage
+import FetchUserClothesRESTPage from './pages/FetchUserClothesRESTPage'; // Import the new page
+import FetchUserClothesGraphQLPage from './pages/FetchUserClothesGraphQLPage'; // Import the new page
+//import SecureUserDetailsPage from './pages/SecureUserDetailsPage'; // Import the SecureUserDetailsPage
+import SecureUserDetailsRESTPage from './pages/SecureUserDetailsRESTPage'; // Import the SecureUserDetailsRESTPage
+import SecureUserDetailsGraphQLPage from './pages/SecureUserDetailsGraphQLPage'; // Import the SecureUserDetailsGraphQLPage
+
+import './App.css'; // Import the CSS file
 
 // Define basic pages with static content
 const About = () => (
-  <div>
-    <h1>About Us</h1>
+  <div className="container">
+    <h2>About Us</h2>
     <p>Here is some information about our website.</p>
   </div>
 );
 
 const Contact = () => (
-  <div>
-    <h1>Contact Us</h1>
+  <div className="container">
+    <h2>Contact Us</h2>
     <p>You can reach us at contact@example.com.</p>
   </div>
 );
 
 const Home = () => (
-  <div>
-    <p>This is the main page with some static content.</p>
+  <div className="container">
+    <h2>Home</h2>
+    <p>Choose one of the links to test API functions.</p>
   </div>
 );
 
@@ -39,26 +43,17 @@ const App = () => {
               <Link to="/">Home</Link>
             </li>
             <li>
-              <Link to="/about">About</Link>
+              <Link to="/list-users-rest">List Users (Secure REST)</Link> {/* Link to REST Page */}
             </li>
             <li>
-              <Link to="/contact">Contact</Link>
+              <Link to="/list-users-graphql">List Users (Secure GraphQL)</Link> {/* Link to GraphQL Page */}
             </li>
             <li>
-              <Link to="/secure-users-rest">List Users (Secure REST)</Link> {/* Link to REST Page */}
+              <Link to="/fetch-user-clothing-rest">Fetch User Clothes (Secure REST)</Link> {/* Link to Secure User Clothing Page */}
             </li>
             <li>
-              <Link to="/secure-users-graphql">List Users (Secure GraphQL)</Link> {/* Link to GraphQL Page */}
+              <Link to="/fetch-user-clothing-graphql">Fetch User Clothes (Secure GraphQL)</Link> {/* Link to Secure User Clothing Page */}
             </li>
-            <li>
-              <Link to="/secure-user-clothing">Fetch User Clothes</Link> {/* Link to Secure User Clothing Page */}
-            </li>
-            <li>
-              <Link to="/secure-user-clothing-rest">Fetch User Clothes (Secure REST)</Link> {/* Link to Secure User Clothing Page */}
-            </li>
-            <li>
-              <Link to="/secure-user-clothing-graphql">Fetch User Clothes(Secure GraphQL)</Link> {/* Link to Secure User Clothing Page */}
-            </li>            
           </ul>
         </nav>
 
@@ -66,12 +61,12 @@ const App = () => {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/secure-users-rest" element={<SecureUsersRESTPage />} /> {/* Add route for REST Page */}
-          <Route path="/secure-users-graphql" element={<SecureUsersGraphQLPage />} /> {/* Add route for GraphQL Page */}
-          <Route path="/secure-user-details/:userid" element={<SecureUserDetailsPage />} /> {/* Add route for SecureUserDetailsPage */}
-          <Route path="/secure-user-clothing" element={<SecureUserClothingPage />} /> {/* Add route for SecureUserClothingPage */}
-          <Route path="/secure-user-clothing-rest" element={<SecureUserClothingRESTPage />} /> {/* Add route for SecureUserClothingPage */}
-          <Route path="/secure-user-clothing-graphql" element={<SecureUserClothingGraphQLPage />} /> {/* Add route for SecureUserClothingPage */}              
+          <Route path="/list-users-rest" element={<ListUsersRESTPage />} /> {/* Add route for List Users via REST Page */}
+          <Route path="/list-users-graphql" element={<ListUsersGraphQLPage />} /> {/* Add route for List Users via GraphQL Page */}
+          <Route path="/fetch-user-clothing-rest" element={<FetchUserClothesRESTPage />} /> {/* Add route for FetchUserClothingPage via REST */}
+          <Route path="/fetch-user-clothing-graphql" element={<FetchUserClothesGraphQLPage />} /> {/* Add route for FetchUserClothingPage via GraphQL */}
+          <Route path="/secure-user-details-rest/:userid" element={<SecureUserDetailsRESTPage />} /> {/* Add route for SecureUserDetailsPage */}  
+          <Route path="/secure-user-details-graphql/:userid" element={<SecureUserDetailsGraphQLPage />} /> {/* Add route for SecureUserDetailsPage */}        
         </Routes>
       </div>
     </Router>

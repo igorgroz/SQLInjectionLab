@@ -1,6 +1,136 @@
-/* src/App.css */
-.App {
-  font-family: Arial, sans-serif;
-  text-align: center;
+/* App.css */
+
+/* Global Styles */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f4f4;
+  color: #333;
 }
 
+h1, h2, h3 {
+  color: #222;
+}
+
+/* Container for main content pages */
+.container {
+  max-width: 960px;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Global Headings */
+h1 {
+  text-align: center;
+  margin: 20px 0;
+}
+
+/* Horizontal Rule */
+hr {
+  border: 0;
+  border-top: 1px solid #ddd;
+  margin: 20px 0;
+}
+
+/* Navigation Bar */
+nav {
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 10px 20px;
+}
+
+nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+nav ul li {
+  margin: 0 10px;
+}
+
+nav ul li a {
+  text-decoration: none;
+  color: #007bff;
+  font-weight: bold;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+nav ul li a:hover {
+  background-color: #e9ecef;
+  color: #0056b3;
+}
+
+nav ul li a.active {
+  background-color: #007bff;
+  color: #fff;
+}
+
+/* Collapsible Sections for Add/Remove Clothes */
+details {
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin: 2px 0;
+  padding: 2px;
+}
+
+details summary {
+  font-size: 1.2em;
+  font-weight: bold;
+  cursor: pointer;
+  outline: none;
+  display: flex;              /* Use flexbox for horizontal alignment */
+  justify-content: flex-start; /* Align text and arrow to the left */
+  align-items: center;        /* Vertically align text and arrow */
+  padding: 4px;
+  position: relative;
+}
+
+/* Custom arrow for collapsible section */
+details summary::before {
+  content: '▶';              /* Default arrow */
+  font-size: 1.5em;
+  color: #007bff;
+  margin-right: 10px;         /* Space between the arrow and the text */
+  transition: transform 0.3s ease;  /* Smooth transition for rotation */
+}
+
+details[open] summary::before {
+  transform: rotate(90deg); /* Rotate arrow when section is open */
+}
+
+/* Buttons */
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: #fff;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-right: 10px;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+/* Input Fields */
+input[type="text"] {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-right: 10px;
+  font-size: 1em;
+}
