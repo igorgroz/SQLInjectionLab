@@ -43,16 +43,16 @@ const App = () => {
               <Link to="/">Home</Link>
             </li>
             <li>
-              <Link to="/list-users-rest">List Users (Secure REST)</Link> {/* Link to REST Page */}
+              <Link to="/list-users-rest">List Users (Sec REST)</Link> {/* Link to REST Page */}
             </li>
             <li>
-              <Link to="/list-users-graphql">List Users (Secure GraphQL)</Link> {/* Link to GraphQL Page */}
+              <Link to="/list-users-graphql">List Users (Sec GQL)</Link> {/* Link to GraphQL Page */}
             </li>
             <li>
-              <Link to="/fetch-user-clothing-rest">Fetch User Clothes (Secure REST)</Link> {/* Link to Secure User Clothing Page */}
+              <Link to="/fetch-user-clothing-rest">Fetch User Clothes (Sec REST)</Link> {/* Link to Secure User Clothing Page */}
             </li>
             <li>
-              <Link to="/fetch-user-clothing-graphql">Fetch User Clothes (Secure GraphQL)</Link> {/* Link to Secure User Clothing Page */}
+              <Link to="/fetch-user-clothing-graphql">Fetch User Clothes (Sec GQL)</Link> {/* Link to Secure User Clothing Page */}
             </li>
           </ul>
         </nav>

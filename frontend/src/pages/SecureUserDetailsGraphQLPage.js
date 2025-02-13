@@ -6,6 +6,9 @@ import config from '../config'; // Import the config file
 const SecureUserDetailsGraphQLPage = () => {
   const [newClothId, setNewClothId] = useState('');
   const [removeClothId, setRemoveClothId] = useState('');
+  const [serverResponse, setServerResponse] = useState(''); // State to hold the server response
+  const [graphqlEndpoint, setGraphqlEndpoint] = useState(''); // State to hold the GraphQL endpoint
+  const [mutationQuery, setMutationQuery] = useState(''); // State to hold the mutation query
 
   const { userid } = useParams(); // Get dynamic user ID from the URL
   const parsedUserId = parseInt(userid, 10);
@@ -56,11 +59,9 @@ const SecureUserDetailsGraphQLPage = () => {
         addSafeCloth(userid: ${parsedUserId}, clothid: ${newClothId})
       }
     `;
-  
-    // Log the endpoint, mutation query, and variables
-    console.log('GraphQL Endpoint:', config.GRAPHQL_ENDPOINT);
-    console.log('GraphQL Mutation (AddSafeCloth):', mutation);
-  
+    setGraphqlEndpoint(config.GRAPHQL_ENDPOINT); // Set the GraphQL endpoint
+    setMutationQuery(mutation); // Set the mutation query
+
     // Make the request using fetch
     fetch(config.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -72,11 +73,14 @@ const SecureUserDetailsGraphQLPage = () => {
       .then(response => response.json())
       .then(data => {
         console.log('Server Response:', data);
-        alert(`Cloth added: ${data.data.addSafeCloth}`);
+        setServerResponse(`Cloth added: ${data.data.addSafeCloth}`);
         setNewClothId('');
         refetch(); // Refresh query data
       })
-      .catch(error => console.error('Error adding cloth:', error));
+      .catch(error => {
+        console.error('Error adding cloth:', error);
+        setServerResponse('Error adding cloth. Check console for details.');
+      });
   };
 
   // Handle Remove Cloth
@@ -86,11 +90,9 @@ const SecureUserDetailsGraphQLPage = () => {
         removeSafeCloth(userid: ${parsedUserId}, clothid: ${removeClothId})
       }
     `;
-  
-    // Log the endpoint, mutation query, and variables
-    console.log('GraphQL Endpoint:', config.GRAPHQL_ENDPOINT);
-    console.log('GraphQL Mutation (RemoveSafeCloth):', mutation);
-  
+    setGraphqlEndpoint(config.GRAPHQL_ENDPOINT); // Set the GraphQL endpoint
+    setMutationQuery(mutation); // Set the mutation query
+
     // Make the request using fetch
     fetch(config.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -102,13 +104,15 @@ const SecureUserDetailsGraphQLPage = () => {
       .then(response => response.json())
       .then(data => {
         console.log('Server Response:', data);
-        alert(`Cloth removed: ${data.data.removeSafeCloth}`);
+        setServerResponse(`Cloth removed: ${data.data.removeSafeCloth}`);
         setRemoveClothId('');
         refetch(); // Refresh query data
       })
-      .catch(error => console.error('Error removing cloth:', error));
+      .catch(error => {
+        console.error('Error removing cloth:', error);
+        setServerResponse('Error removing cloth. Check console for details.');
+      });
   };
-  
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error.message}</p>;
@@ -117,26 +121,6 @@ const SecureUserDetailsGraphQLPage = () => {
     <div>
       <hr />
       <h1>User Clothes Information from GraphQL API</h1>
-
-      {/* Display the GraphQL Endpoint and a sample query */}
-      
-      <p>
-          GraphQL Endpoint: <code style={{ color: 'blue' }}>{config.GRAPHQL_ENDPOINT}</code>
-      </p>
-
-      <p>GraphQL Query:</p>
-      <pre style={{ color: 'blue' }}>
-        {`query GetSafeClothesByUser {
-  getSafeClothesByUser(userid: ${String(parsedUserId)}) {
-    userid
-    name
-    surname
-    clothid
-    description
-    color
-  }
-}`}
-      </pre>
 
       <h3>Results:</h3>
       {data && data.getSafeClothesByUser && data.getSafeClothesByUser.length > 0 ? (
@@ -160,7 +144,7 @@ const SecureUserDetailsGraphQLPage = () => {
       {/* Collapsible section for Adding a Cloth */}
       <details open>
         <summary>
-          <h2>Add Cloth</h2>
+          <h2>Add Cloth Item</h2>
         </summary>
         <div>
           <input
@@ -169,8 +153,7 @@ const SecureUserDetailsGraphQLPage = () => {
             onChange={e => setNewClothId(e.target.value)}
             placeholder="Enter cloth ID to add"
           />
-          <button onClick={handleUpdateCloth}>Add Cloth</button>
-          
+          <button onClick={handleUpdateCloth}>Add Cloth (gql)</button>
         </div>
       </details>
       <hr />
@@ -178,7 +161,7 @@ const SecureUserDetailsGraphQLPage = () => {
       {/* Collapsible section for Removing a Cloth */}
       <details open>
         <summary>
-          <h2>Remove Cloth</h2>
+          <h2>Remove Cloth Item</h2>
         </summary>
         <div>
           <input
@@ -187,10 +170,18 @@ const SecureUserDetailsGraphQLPage = () => {
             onChange={e => setRemoveClothId(e.target.value)}
             placeholder="Enter cloth ID to remove"
           />
-          <button onClick={handleRemoveCloth}>Remove Cloth</button>
-          
+          <button onClick={handleRemoveCloth}>Remove Cloth (gql)</button>
         </div>
       </details>
+
+      {/* Display the server response and mutation query at the bottom */}
+      {serverResponse && (
+        <div style={{ marginTop: '20px', padding: '10px', border: '1px solid blue' }}>
+          <p>Server Response: {serverResponse}</p> {/* Display the latest server response */}        
+          <p>GraphQL Endpoint: {graphqlEndpoint}</p> {/* Display the GraphQL endpoint */}
+          <p>GraphQl Mutation: {mutationQuery} {/* Display the mutation query */}</p>
+        </div>
+      )}
     </div>
   );
 };

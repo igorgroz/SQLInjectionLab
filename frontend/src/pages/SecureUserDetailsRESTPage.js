@@ -117,7 +117,7 @@ const SecureUserDetailsRESTPage = () => {
       <div className="flex-container">
         <details>
           <summary>
-            <h3>Add Clothes</h3>
+            <h3>Add Cloth Item</h3>
           </summary>
           <div>
             <input
@@ -126,13 +126,13 @@ const SecureUserDetailsRESTPage = () => {
               onChange={(e) => setNewClothId(e.target.value)}
               placeholder="Enter clothID to add"
             />
-            <button onClick={handleUpdateCloth}>Add Cloth</button>
+            <button onClick={handleUpdateCloth}>Add Cloth (REST)</button>
           </div>
         </details>
 
         <details>
           <summary>
-            <h3>Remove Clothes</h3>
+            <h3>Remove Cloth Item</h3>
           </summary>
           <div>
             <input
@@ -141,7 +141,7 @@ const SecureUserDetailsRESTPage = () => {
               onChange={(e) => setRemoveClothId(e.target.value)}
               placeholder="Enter clothID to remove"
             />
-            <button onClick={handleRemoveCloth}>Remove Cloth</button>
+            <button onClick={handleRemoveCloth}>Remove Cloth (REST)</button>
           </div>
         </details>
       </div>
