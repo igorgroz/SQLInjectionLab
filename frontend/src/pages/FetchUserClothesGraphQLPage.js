@@ -6,7 +6,7 @@ const FetchUserClothesGraphQLPage = () => {
 
   return (
     <div>
-      <h2>Retrieve User Details via Secured GraphQL</h2>
+      <h2>Retrieve User Details (GraphQL)</h2>
       <input
         type="number"
         value={userId}

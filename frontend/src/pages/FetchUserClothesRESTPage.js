@@ -6,7 +6,7 @@ const FetchUserClothesRESTPage = () => {
 
   return (
     <div>
-      <h2>Retrieve User Details via Secured REST API</h2>
+      <h2>Retrieve User Details (REST)</h2>
       <input
         type="number"
         value={userId}
