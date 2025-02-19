@@ -54,7 +54,7 @@ router.get("/safe-users/:userid/clothes", async (req, res) => {
   });
   
 
-// Secure POST method to add a new cloth for a user
+/* Secure POST method to add a new cloth for a user - old method where userid was coming from a paramter
 router.post("/safe-users/:userid/clothes", async (req, res) => {
   const { userid } = req.params;
   const { clothid } = req.body;
@@ -82,6 +82,37 @@ router.post("/safe-users/:userid/clothes", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+*/
+
+// Secure POST method to add a new cloth for a user
+router.post("/safe-users/clothes", async (req, res) => {
+  const { userid, clothid } = req.body;
+
+  // Validate that both userid and clothid are provided
+  if (!userid || !clothid) {
+    return res.status(400).json({ message: "User ID and Cloth ID are required" });
+  }
+
+  try {
+    // Check if the user exists
+    const userResult = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Insert a new entry in the user_clothes table
+    const insertResult = await pool.query(
+      "INSERT INTO user_clothes (userid, clothid) VALUES ($1, $2) RETURNING *",
+      [userid, clothid]
+    );
+
+    res.json({ message: `Cloth ${clothid} added to user ${userid}'s wardrobe`, data: insertResult.rows[0] });
+  } catch (err) {
+    console.error("Error adding cloth:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 // Secure POST method to remove a cloth from a user's wardrobe
 router.post("/safe-users/remove-cloth", async (req, res) => {
