@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import { msalInstance } from "./auth/authConfig";
 import Menu from "./components/Menu";
 import ListUsersRESTPage from "./pages/ListUsersRESTPage";
 import ListUsersGraphQLPage from "./pages/ListUsersGraphQLPage";
@@ -19,36 +18,22 @@ const Home = () => (
 );
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(true); // Assume user is authenticated for now
+  const [user, setUser] = useState(null); // You can mock user info or leave as null
 
+  // Disable the login check for now
   useEffect(() => {
-    const checkAccount = async () => {
-      await msalInstance.initialize(); // Ensure MSAL is initialized before usage
-      const currentAccounts = msalInstance.getAllAccounts();
-      if (currentAccounts.length > 0) {
-        setUser(currentAccounts[0]);
-        setIsAuthenticated(true);
-      }
-    };
-    checkAccount();
+    // Just assume a mock user or leave it null
+    setUser({ name: "Mock User", id: "1234" });
+    setIsAuthenticated(true); // Assume user is logged in
   }, []);
 
-  const login = async () => {
-    try {
-      await msalInstance.initialize(); // Ensure MSAL is initialized before usage
-      const loginResponse = await msalInstance.loginPopup({
-        scopes: ["user.read"],
-      });
-      setUser(loginResponse.account);
-      setIsAuthenticated(true);
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
+  // Remove login logic temporarily
+  const login = () => {
+    console.log("Login is disabled for now.");
   };
 
   const logout = () => {
-    msalInstance.logoutPopup();
     setIsAuthenticated(false);
     setUser(null);
   };
@@ -72,7 +57,8 @@ const App = () => {
           ) : (
             <div>
               <h2>Please log in to access the API testing.</h2>
-              <button onClick={login}>Login with MS Entra ID</button>
+              {/* Remove the login button */}
+              {/* <button onClick={login}>Login with MS Entra ID</button> */}
             </div>
           )}
         </div>
