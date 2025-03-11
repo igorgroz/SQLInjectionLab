@@ -1,3 +1,6 @@
+Here is how to use the APIs:
+
+
 Vulnerable GET (/users/:userid/clothes):
 
 Uses direct string interpolation in the SQL query, making it vulnerable to SQL injection.
