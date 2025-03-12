@@ -35,7 +35,7 @@ Resources:
       Name: clths-frontend-build
       Source:
         Type: GITHUB
-        Location: https://github.com/your-github-username/your-repo-name
+        Location: https://github.com/igorgroz/SQLInjectionLab
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -75,10 +75,10 @@ Resources:
                 Provider: GitHub
                 Version: '1'
               Configuration:
-                Owner: your-github-username
-                Repo: your-repo-name
+                Owner: igorgroz
+                Repo: SQLInjectionLab
                 Branch: master
-                OAuthToken: your-github-oauth-token
+                OAuthToken: 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
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
