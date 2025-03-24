@@ -9,13 +9,16 @@ phases:
       - ls -al   # Check the directory contents to confirm 'frontend' exists
       - cd frontend
       - npm install
+      - pwd
 
   build:
     commands:
       - echo "Building the React app"
       - ls -al  # Verify the contents of the 'frontend' directory before running build
-      - cd frontend
+      - pwd
+      # - cd frontend
       - npm run build
+      - ls -al
 
 artifacts:
   base-directory: frontend/build    # React build output directory
