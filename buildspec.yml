@@ -10,6 +10,7 @@ phases:
 
   build:
     commands:
+      - pwd
       - cd frontend         # Navigate to frontend folder again (ensure correct folder)
       - npm run build       # Run the build command to create the React app
 
