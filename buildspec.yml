@@ -1,16 +1,19 @@
 version: 0.2
+
 phases:
   install:
     runtime-versions:
       nodejs: 16
     commands:
-      - cd frontend       # Navigate to frontend folder
-      - npm install
+      - cd frontend         # Navigate to frontend folder
+      - npm install         # Install frontend dependencies
+
   build:
     commands:
-      - cd frontend
-      - npm run build
+      - cd frontend         # Navigate to frontend folder again (ensure correct folder)
+      - npm run build       # Run the build command to create the React app
+
 artifacts:
-  base-directory: frontend/build    # React build output
+  base-directory: frontend/build    # React build output directory
   files:
-    - '**/*'
+    - '**/*'                        # Include all files in the build output
