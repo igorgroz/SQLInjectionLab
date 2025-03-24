@@ -1,0 +1,5 @@
+aws cloudformation deploy \
+  --stack-name stack-Clths-app-dpl4 \
+  --template-file deploy-frontend.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides GitHubOwner=igorgroz GitHubRepo=SQLInjectionLab GitHubBranch=master
