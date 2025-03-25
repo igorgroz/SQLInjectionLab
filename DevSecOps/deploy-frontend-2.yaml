@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Deploy React frontend app using CodePipeline and CodeBuild, restricting access to the S3 bucket to a single IP.
+Description: Deploy React frontend app using CodePipeline and CodeBuild, with a public S3 bucket for website hosting.
 
 Parameters:
   GitHubOwner:
@@ -22,40 +22,56 @@ Parameters:
     MaxLength: 63
     AllowedPattern: "[a-z0-9.-]*"
     ConstraintDescription: "Bucket name must be between 3 and 63 characters, and must only contain lowercase letters, numbers, hyphens, and periods."
-  MyIP:
-    Type: String
-    Description: Your IP address (e.g., 192.168.1.1) to restrict access to the website.
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
-    ConstraintDescription: "Please provide a valid IPv4 address."
 
 Resources:
 
-  # S3 bucket for frontend build output 
+  # S3 bucket for frontend build output
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref FrontendBucketName
-      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false      
       WebsiteConfiguration:
         IndexDocument: index.html
-        ErrorDocument: error.html
+        ErrorDocument: error.html        
 
-  # Bucket Policy to restrict access to the specified IP
+
   FrontendBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    DependsOn: FrontendBucket  # Ensure the bucket exists before the policy is applied
+    Type: 'AWS::S3::BucketPolicy'
     Properties:
-      Bucket: !Ref FrontendBucket
       PolicyDocument:
-        Version: "2012-10-17"
+        Id: MyPolicy
+        Version: 2012-10-17
         Statement:
-          - Effect: Allow
-            Action: "s3:GetObject"
-            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
-            Principal: "*"
-            Condition:
-              IpAddress:
-                aws:SourceIp: !Ref MyIP
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref FrontendBucket
+                - /*
+      Bucket: !Ref FrontendBucket
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt 
+      - FrontendBucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
+  FrontendBucketSecureURL:
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !GetAtt 
+          - FrontendBucket
+          - DomainName
+    Description: Name of S3 bucket to hold website content
+
 
   # CodeBuild role
   CodeBuildRole:

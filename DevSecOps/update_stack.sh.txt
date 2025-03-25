@@ -1,4 +1,4 @@
-aws cloudformation update-stack \                                                                                                              х 254 10:54:00
+aws cloudformation update-stack \
   --stack-name stack-Clths-app-dpl12 \
   --template-body file://deploy_fe_cloudfront.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -7,5 +7,4 @@ aws cloudformation update-stack \                                               
     ParameterKey=GitHubRepo,ParameterValue=SQLInjectionLab \
     ParameterKey=GitHubBranch,ParameterValue=master \
     ParameterKey=ConnectionArn,ParameterValue=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
-    ParameterKey=FrontendBucketName,ParameterValue=clhtsfrontend240325 \
-    ParameterKey=MyIP,ParameterValue=122.107.209.70
+    ParameterKey=FrontendBucketName,ParameterValue=clhts-origin-250325 \
