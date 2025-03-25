@@ -8,3 +8,8 @@ aws cloudformation update-stack \
     ParameterKey=GitHubBranch,ParameterValue=master \
     ParameterKey=ConnectionArn,ParameterValue=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
     ParameterKey=FrontendBucketName,ParameterValue=clhts-origin-250325 \
+
+
+
+To validate
+aws cloudformation validate-template --template-body file://deploy_fe_cloudfront.yaml

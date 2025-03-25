@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Deploy React frontend app using CodePipeline and CodeBuild, serving via CloudFront and restricting S3 access.
+Description: Deploy React frontend app using CodePipeline, CodeBuild, and CloudFront, with a secure S3 bucket.
 
 Parameters:
   GitHubOwner:
@@ -23,97 +23,52 @@ Parameters:
     AllowedPattern: "[a-z0-9.-]*"
     ConstraintDescription: "Bucket name must be between 3 and 63 characters, and must only contain lowercase letters, numbers, hyphens, and periods."
 
-
 Resources:
-  FrontendBucket:
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
 
-
-  FrontendBucketPolicy:
-    Type: 'AWS::S3::BucketPolicy'
-    Properties:
-      PolicyDocument:
-        Id: MyPolicy
-        Version: 2012-10-17
-        Statement:
-          - Sid: PublicReadForGetBucketObjects
-            Effect: Allow
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource: !Join 
-              - ''
-              - - 'arn:aws:s3:::'
-                - !Ref S3Bucket
-                - /*
-      Bucket: !Ref S3Bucket
-Outputs:
-  WebsiteURL:
-    Value: !GetAtt 
-      - S3Bucket
-      - WebsiteURL
-    Description: URL for website hosted on S3
-  S3BucketSecureURL:
-    Value: !Join 
-      - ''
-      - - 'https://'
-        - !GetAtt 
-          - S3Bucket
-          - DomainName
-    Description: Name of S3 bucket to hold website content
-
-
-
-
-
-
-  # S3 bucket for frontend build output
+  # S3 Bucket
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref FrontendBucketName
-      AccessControl: Private
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
-  # Bucket Policy to restrict access to CloudFront Origin and IP
+
+
+  # Secure Bucket Policy for CloudFront
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     DependsOn:
       - FrontendBucket
-      - CloudFrontOriginAccessIdentity
+      - CloudFrontOriginAccessControl    
     Properties:
-      Bucket: !Ref FrontendBucketName
+      Bucket: !Ref FrontendBucket
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowCloudFrontServicePrincipalReadOnly
+          - Sid: CloudFrontAccess
             Effect: Allow
             Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
+              Service: "cloudfront.amazonaws.com"
+            Action: "s3:GetObject"
             Resource: !Sub "arn:aws:s3:::${FrontendBucketName}/*"
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
 
-  # CloudFront Origin Access Identity
-  CloudFrontOriginAccessIdentity:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+  # CloudFront Origin Access Control (OAC)
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
     Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub "Access Identity for ${AWS::StackName} CloudFront"
+      OriginAccessControlConfig:
+        Description: "Origin Access Control (OAC) for CloudFront to access S3 bucket"
+        Name: static-hosting-OAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
 
   # CloudFront Distribution
   CloudFrontDistribution:
@@ -122,28 +77,41 @@ Outputs:
       - FrontendBucket
     Properties:
       DistributionConfig:
-        Enabled: true
         Origins:
           - DomainName: !GetAtt FrontendBucket.DomainName
-            Id: S3Origin
-            S3OriginConfig:
-              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${AWS::StackName}"
+            Id: static-hosting
+            S3OriginConfig: {}
+            OriginAccessControlId: !GetAtt CloudFrontOriginAccessControl.Id
+        Enabled: true
+        DefaultRootObject: index.html
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        HttpVersion: http2
+        Aliases:
+          - demo.oznetsecure.com.au
+        ViewerCertificate:
+          AcmCertificateArn: "arn:aws:acm:us-east-1:510151297987:certificate/fd13da4b-d448-4032-91a7-31ba0196dd2f"
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
         DefaultCacheBehavior:
-          TargetOriginId: S3Origin
+          TargetOriginId: static-hosting
           ViewerProtocolPolicy: redirect-to-https
           AllowedMethods:
             - GET
             - HEAD
-          CachedMethods:
-            - GET
-            - HEAD
+            - OPTIONS
+          Compress: true
           ForwardedValues:
             QueryString: false
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
-        PriceClass: PriceClass_100
+            Cookies:
+              Forward: none
 
-  # CodeBuild role
+  # CodeBuild Role
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -163,7 +131,7 @@ Outputs:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${FrontendBucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -175,7 +143,7 @@ Outputs:
                   - codestar-connections:PassConnection
                 Resource: !Ref ConnectionArn
 
-  # CodePipeline role
+  # CodePipeline Role
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -195,7 +163,7 @@ Outputs:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${FrontendBucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
               - Effect: Allow
                 Action:
                   - codebuild:BatchGetBuilds
@@ -273,14 +241,22 @@ Outputs:
               InputArtifacts:
                 - Name: BuildArtifact
               Configuration:
-                BucketName: !Ref FrontendBucketName
+                BucketName: !Ref FrontendBucket
                 Extract: true
               RunOrder: 1
       ArtifactStore:
         Type: S3
-        Location: !Ref FrontendBucketName
+        Location: !Ref FrontendBucket
 
 Outputs:
+  CloudFrontDist:
+    Value: !Ref CloudFrontDistribution
+    Description: CloudFront Distribution ID
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Description: CloudFront Distribution Domain Name
   WebsiteURL:
-    Description: URL of the React app via CloudFront
-    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+    Value: !GetAtt
+      - FrontendBucket
+      - WebsiteURL
+    Description: URL for website hosted on S3

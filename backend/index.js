@@ -8,7 +8,11 @@ const { insecureGraphQLMiddleware } = require("./insecureGraphQL");
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // Allow frontend to call backend
+/* app.use(cors()); */ // Allow frontend to call backend
+
+app.use(cors({
+  origin: '*', // Allow all origins for testing
+}));
 
 // API to test server status
 app.get("/", (req, res) => {
@@ -23,7 +27,16 @@ app.use("/api", insecureRoutes);
 app.use("/graphql-secure", secureGraphQLMiddleware);
 app.use("/graphql-insecure", insecureGraphQLMiddleware);
 
+/*
 const PORT = 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+});
+*/
+
+// Use the PORT from the .env file
+const PORT = process.env.PORT || 5001;
+//const PORT =5001;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
 });
