@@ -1,4 +1,4 @@
-aws cloudformation deploy \                                                                                      3m 16s 01:37:35
+aws cloudformation deploy \
   --stack-name stack-Clths-app-dpl12 \
   --template-file deploy-frontend-2.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -7,5 +7,5 @@ aws cloudformation deploy \                                                     
     GitHubRepo=SQLInjectionLab \
     GitHubBranch=master \
     ConnectionArn=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
-    FrontendBucketName=clhtsfrontend240325 \
+    FrontendBucketName=clhts-origin-250325 \
     MyIP=122.107.209.70
