@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Access Server: Adds an EC2 instance and a security group. Installs the latest version of Access Server and provides direct access to Administration Portal. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template."
+
+Parameters:
+  ActivationKey:
+    Description: "Subscription key for the OpenVPN Access Server instance"
+    Type: String
+    Default: "ewogICJub25jZSIgOiAiQjk5OTREQzBBMzBCMzQ2MUMzMkUyOENCMEFENjY3OEQ0QkU1QkNCOEE4QTgxNzNBNkVENjRGMkY3MEI5RkVENyIsCiAgInN1YmtleSIgOiAiQVNVRURQYm9NYnphRnhWZ0hxRGNJd2RfQVNJSFNWWUZ2d2dZTGpIYXNDcG5pQUxNZUNyb1NYSHdfM2QzNDE5MGQwODA0OGM4MDg0YTE0NmZjZmRmNzgzMjhlNTM4YzhkNyIsCiAgImlhdCIgOiAxNzQ2NjgzNTQ0Cn0=" # This is likely a placeholder or for a free tier
+  KeyName:
+    Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance"
+    Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: ".+"
+    ConstraintDescription: "must be the name of an existing EC2 KeyPair."
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "ID of your existing Virtual Private Cloud (VPC)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "must be an existing VPC"
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: "ID of public subnet in your Virtual Private Cloud (VPC)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "must be an existing public subnet in selected VPC"
+  InstanceType:
+    Description: "Access Server EC2 instance type"
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      # (Shortened list for brevity, original had many more)
+      - m3.medium
+      - m3.large
+      - c3.large
+      - c3.xlarge
+    ConstraintDescription: "must be a valid EC2 instance type."
+  InstanceName:
+    Description: "EC2 Instance Name"
+    Type: String
+    Default: OpenVPNAccessServer
+  AdminAccessCIDR: # <<< NEW PARAMETER for security
+    Description: "CIDR block for SSH and Web Admin access to the OpenVPN server. Example: YOUR_PUBLIC_IP/32"
+    Type: String
+    Default: "0.0.0.0/0" # WARNING: Allows access from ANY IP. Change for better security.
+
+Resources:
+  DescribeImagesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DescribeImages
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: ec2:DescribeImages
+                Effect: Allow
+                Resource: "*"
+
+  ASLaunchTemplate: # This launch template is minimal, primarily for HttpTokens setting
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpTokens: optional # OpenVPN AS might use IMDSv1
+
+  GetASPropsLambda: # Renamed for clarity
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.10
+      Handler: index.handler
+      Role: !GetAtt DescribeImagesRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import random
+          import string
+          import boto3
+          import cfnresponse
+          import json
+          import traceback
+
+          def handler(event, context):
+            try:
+              ec2_client = boto3.client('ec2')
+              response = ec2_client.describe_images(
+                  Owners=[event['ResourceProperties']['Owner']],
+                  Filters=[
+                      {'Name': 'name', 'Values': [event['ResourceProperties']['Name']]},
+                      {'Name': 'architecture', 'Values': [event['ResourceProperties']['Architecture']]},
+                      {'Name': 'root-device-type', 'Values': ['ebs']}
+                  ]
+              )
+
+              amis = sorted(response['Images'], key=lambda x: x['CreationDate'], reverse=True)
+
+              if not amis:
+                  cfnresponse.send(event, context, cfnresponse.FAIL, {'Error': 'No AMIs found matching criteria'})
+                  return
+
+              response_data = {
+                  'id': amis[0]['ImageId'],
+                  'adminPw': ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(10))
+              }
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+            except Exception as e:
+              traceback.print_exc() # Use print_exc() for better logging
+              cfnresponse.send(event, context, cfnresponse.FAIL, {'Error': str(e)})
+
+  ASPropsCustomResource: # Renamed for clarity
+    Type: Custom::ASParams
+    Properties:
+      ServiceToken: !GetAtt GetASPropsLambda.Arn
+      Owner: "444663524611" # OpenVPN Community AMIs
+      Name: "OpenVPN Access Server Community Image" # Specific AMI name pattern
+      Architecture: "x86_64"
+
+  AccessServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Enable needed access to OpenVPN Access Server"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 943 # Admin Web UI
+          ToPort: 943
+          CidrIp: !Ref AdminAccessCIDR # <<< MODIFIED for security
+        - IpProtocol: tcp
+          FromPort: 945 # LSA (rarely needed unless clustering)
+          ToPort: 945
+          CidrIp: !Ref AdminAccessCIDR # <<< MODIFIED for security
+        - IpProtocol: tcp
+          FromPort: 443 # Client Web UI / Profile Download / VPN over TCP
+          ToPort: 443
+          CidrIp: !Ref AdminAccessCIDR # <<< MODIFIED for security
+        - IpProtocol: udp # Primary VPN data channel
+          FromPort: 1194
+          ToPort: 1194
+          CidrIp: "0.0.0.0/0" # Often needs to be open for clients from various IPs
+        - IpProtocol: tcp # SSH access
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminAccessCIDR # <<< MODIFIED for security
+      Tags:
+        - Key: Name
+          Value: !Sub "${InstanceName}-SG"
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !GetAtt ASLaunchTemplate.LaunchTemplateId
+        Version: !GetAtt ASLaunchTemplate.LatestVersionNumber
+      InstanceType: !Ref InstanceType
+      SourceDestCheck: "false" # Important for routing traffic through the VPN server
+      KeyName: !Ref KeyName
+      ImageId: !GetAtt ASPropsCustomResource.id
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true" # Needs a public IP to be reachable
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref AccessServerSecurityGroup
+          SubnetId: !Ref SubnetId
+      UserData:
+        Fn::Base64: !Sub |
+          license=${ActivationKey}
+          admin_pw=${ASPropsCustomResource.adminPw}
+
+Outputs:
+  AdminPortalURL: # Renamed for clarity
+    Value: !Sub "https://$EC2Instance.PublicIp/admin/"
+    Description: "Admin UI URL for OpenVPN Access Server. Login with username 'openvpn' and TempPassword. Allow a few minutes for service startup."
+  TemporaryAdminPassword: # Renamed for clarity
+    Value: !GetAtt ASPropsCustomResource.adminPw
+    Description: "Temporary password for 'openvpn' superuser. CHANGE THIS PASSWORD after first login via SSH ('sudo passwd openvpn') or Web UI."
+  InstanceID:
+    Value: !Ref EC2Instance
+    Description: "Instance ID of the OpenVPN Access Server"
+  PublicIPAddress:
+    Value: !GetAtt EC2Instance.PublicIp
+    Description: "Public IP Address of the OpenVPN Access Server"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Access Server Configuration"
+        Parameters:
+          - ActivationKey
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcId
+          - SubnetId
+          - AdminAccessCIDR # <<< ADDED to a group
+      - Label:
+          default: "EC2 Configuration"
+        Parameters:
+          - InstanceName
+          - InstanceType
+          - KeyName
+    ParameterLabels:
+      ActivationKey:
+        default: "Activation Key"
+      VpcId:
+        default: "Choose VPC ID (*)"
+      SubnetId:
+        default: "Choose Public Subnet ID (*)"
+      InstanceName:
+        default: "Instance Name"
+      InstanceType:
+        default: "Instance Type"
+      KeyName:
+        default: "Key Pair Name (*)"
+      AdminAccessCIDR: # <<< ADDED label
+        default: "Admin/SSH Access CIDR (e.g. YOUR_IP/32) (*)"

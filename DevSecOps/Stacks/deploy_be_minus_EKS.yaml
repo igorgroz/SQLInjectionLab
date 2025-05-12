@@ -1,0 +1,383 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infrastructure for SQL Injection Project (VPC, RDS, Secrets) with
+  updated RDS SG rules # Updated Description
+
+Parameters:
+  DBInstanceIdentifier:
+    Type: String
+    Default: sqlinjproject-db
+    Description: Identifier for the RDS instance
+  DBMasterUsername:
+    Type: String
+    Default: sql_lab_user
+    Description: Master username for the PostgreSQL database
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for the PostgreSQL database
+  DBSecretName:
+    Type: String
+    Default: sqlinjproject-db-secret
+    Description: Name of the Secrets Manager secret for the database credentials
+  RDSSecurityGroupName:
+    Type: String
+    Default: sqlinjproject-rds-sg
+    Description: Security group name for the RDS database
+  JWTSecretParameter:
+    Type: String
+    NoEcho: true
+    Description: Secret for JWT token signing
+  JWTSecretName:
+    Type: String
+    Default: jwt-secret
+    Description: Secrets Manager secret for JWT credentials
+  MyLocalMachineCIDR:
+    # <<< UPDATED PARAMETER - Added Default
+    Type: String
+    Description: CIDR of your local machine for temporary DB access (e.g.,
+      YOUR_IP/32). Set to 0.0.0.0/0 to disable this rule.
+    Default: 0.0.0.0/0 # Default to a value that disables the rule
+  EKSNodeSecurityGroupId:
+    # <<< NEW PARAMETER
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The Security Group ID of your EKS Worker Nodes. (Obtain from EKS
+      stack output)
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet1
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet2
+
+  # Private Subnet 1 (For Application workloads / future EKS nodes)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet1-App
+
+  # Private Subnet 2 (For Application workloads / future EKS nodes)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet2-App
+
+  # Private Subnet 3 (For DB)
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet3-DB
+
+  # Private Subnet 4 (For DB)
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet4-DB
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT-EIP
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicRT
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateRT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet4RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet4
+      RouteTableId: !Ref PrivateRouteTable
+
+  # RDS Security Group
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Ref RDSSecurityGroupName
+      VpcId: !Ref VPC
+      GroupDescription: Security group for RDS Database
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: '-1'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EKSNodeSecurityGroupId # Rule for EKS Nodes
+          Description: Allow EKS Nodes to connect to PostgreSQL
+        - Condition: AllowLocalMachineAccess # <<< Apply Condition here
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref MyLocalMachineCIDR # Rule for your local machine
+          Description: Allow local machine (for migration) to connect to PostgreSQL
+      Tags:
+        - Key: Name
+          Value: !Ref RDSSecurityGroupName
+
+  # RDS DB Parameter Group for PostgreSQL
+  PostgreSQLParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Parameter group for PostgreSQL database
+      Family: postgres17
+      Parameters:
+        log_statement: all
+        log_min_duration_statement: 1000
+
+  # RDS Database Instance (PostgreSQL)
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: '17.2'
+      DBInstanceIdentifier: !Ref DBInstanceIdentifier
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      AllocatedStorage: 20
+      PubliclyAccessible: false
+      MultiAZ: false
+      StorageEncrypted: true
+      DBParameterGroupName: !Ref PostgreSQLParameterGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PostgreSQL
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS DB Subnet Group
+      SubnetIds:
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-DBSubnetGroup
+
+  DBSecrets:
+    Type: AWS::SecretsManager::Secret
+    DependsOn: RDSInstance
+    Properties:
+      Name: !Ref DBSecretName
+      SecretString: !Sub |
+        {
+          "username": "${DBMasterUsername}",
+          "password": "${DBMasterPassword}",
+          "host": "${RDSInstance.Endpoint.Address}",
+          "port": "${RDSInstance.Endpoint.Port}",
+          "dbname": "postgres",
+          "engine": "postgres",
+          "ssl": "true"
+        }
+
+  JWTSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Ref JWTSecretName
+      SecretString: !Sub |
+        {
+          "JWT_SECRET": "${JWTSecretParameter}",
+          "JWT_EXPIRATION": "3600"
+        }
+
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+Conditions:
+  # <<< NEW SECTION FOR CONDITIONAL RULE
+  AllowLocalMachineAccess: !Not
+    - !Equals
+      - !Ref MyLocalMachineCIDR
+      - 0.0.0.0/0
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+  PrivateSubnet1Id:
+    Description: Private App Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Description: Private App Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+  RDSSecurityGroupId:
+    Description: Security Group ID for RDS Database
+    Value: !GetAtt RDSSecurityGroup.GroupId
+  RDSInstanceEndpoint:
+    Description: RDS Instance Endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSInstancePort:
+    Description: RDS Instance Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+  DBSecretsArn:
+    Description: ARN of the Secrets Manager secret for DB credentials
+    Value: !Ref DBSecrets
+  JWTSecretArn:
+    Description: ARN of the Secrets Manager secret for JWT
+    Value: !Ref JWTSecret

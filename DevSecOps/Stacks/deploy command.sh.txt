@@ -1,0 +1,90 @@
+First create Frontend: 
+aws cloudformation deploy \
+  --stack-name stack-Clths-app-dpl12 \
+  --template-file deploy-frontend.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    GitHubOwner=igorgroz \
+    GitHubRepo=SQLInjectionLab \
+    GitHubBranch=master \
+    ConnectionArn=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
+    FrontendBucketName=clhts-origin-250325
+
+    
+    MyIP=122.107.209.70
+
+
+Second create Backend minus EKS see the outputs:
+
+ aws cloudformation create-stack \                                                                                                                                            11:10:54
+  --stack-name sqlinjpr-be-minusEKS \
+  --template-body file://deploy_be_minus_EKS.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=DBInstanceIdentifier,ParameterValue=sqlinjproject-db \
+    ParameterKey=DBMasterUsername,ParameterValue=sql_lab_user \
+    ParameterKey=DBMasterPassword,ParameterValue=StrongPassword123 \
+    ParameterKey=DBSecretName,ParameterValue=sqlinjproject-db-secret \
+    ParameterKey=RDSSecurityGroupName,ParameterValue=sqlinjproject-rds-sg \
+    ParameterKey=JWTSecretParameter,ParameterValue=f4868d01b84c586acb8906edd7bce854525b0fef58cd21bf276a06bbefa79ee657d686366a3f9bc66abecb876a85e1c90d0b2159311668efccf8557bfbb20e32
+
+    Create  Eks Cluster:
+
+    aws cloudformation create-stack \
+  --stack-name sqlinjpr-eks-cluster-stack \
+  --template-body file://create-eks-cluster-for-app.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=VpcId,ParameterValue=vpc-06143697032bf986a \
+    ParameterKey=AppPrivateSubnet1Id,ParameterValue=subnet-0cb8f78e7475d05cb \
+    ParameterKey=AppPrivateSubnet2Id,ParameterValue=subnet-04ce18dfb77f6a1bf \
+    ParameterKey=PublicSubnet1Id,ParameterValue=subnet-0060eb44dff3f97d2 \
+    ParameterKey=PublicSubnet2Id,ParameterValue=subnet-05ef5a56b6b80482e \
+    ParameterKey=EKSClusterName,ParameterValue=sqlinjpr-lab-eks \
+    ParameterKey=NodeInstanceType,ParameterValue=t3.micro \
+    ParameterKey=NodeDesiredCount,ParameterValue=1 \
+    ParameterKey=EKSClusterVersion,ParameterValue="1.32" \
+    ParameterKey=KeyPairName,ParameterValue=sqlinjpr-keypair \
+    ParameterKey=MySshAccessCIDR,ParameterValue=122.107.215.188/32
+
+Optional:
+    # ParameterKey=NodeAMI,ParameterValue="AL2023_x86_64_STANDARD" # Default, uncomment to change
+    # ParameterKey=NodeMinCount,ParameterValue=1 # Default, uncomment to change
+    # ParameterKey=NodeMaxCount,ParameterValue=2 # Default, uncomment to change
+
+
+
+OpenVpn Stack:
+
+    aws cloudformation create-stack \
+  --stack-name my-openvpn-server-stack \
+  --template-body file://OpenVPN_AccessServer_AWS-launcher.json\
+  --capabilities CAPABILITY_IAM
+  --parameters \
+    ParameterKey=KeyName,ParameterValue=sqlinjpr-keypair \
+    ParameterKey=VpcId,ParameterValue=vpc-06143697032bf986a \
+    ParameterKey=SubnetId,ParameterValue=subnet-0060eb44dff3f97d2 \
+    ParameterKey=InstanceType,ParameterValue=t3.micro
+
+Note:
+    # ActivationKey and InstanceName will use their defaults
+
+
+    To update the RDS group after cluster re-creation
+
+    aws cloudformation update-stack \                                                                                                                                         16:20:09
+  --stack-name sqlinjpr-be-minusEKS \
+  --template-body file://deploy_be_minus_EKS.yaml \
+  --parameters \
+    ParameterKey=DBInstanceIdentifier,UsePreviousValue=true \
+    ParameterKey=DBMasterUsername,UsePreviousValue=true \
+    ParameterKey=DBMasterPassword,UsePreviousValue=true \
+    ParameterKey=DBSecretName,UsePreviousValue=true \
+    ParameterKey=RDSSecurityGroupName,UsePreviousValue=true \
+    ParameterKey=JWTSecretParameter,UsePreviousValue=true \
+    ParameterKey=JWTSecretName,UsePreviousValue=true \
+    ParameterKey=MyLocalMachineCIDR,ParameterValue="10.0.0.16" \   
+    ParameterKey=EKSNodeSecurityGroupId,ParameterValue="sg-04756bdfda4ada360"
+
+    Note: Ensure to put the correct sec group id for EKSNodeSecurityGroupId
+    Check status: aws cloudformation describe-stacks --stack-name sqlinjpr-be-minusEKS --query "Stacks[0].StackStatus"    

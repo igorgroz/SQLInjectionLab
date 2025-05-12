@@ -1,0 +1,241 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EKS Cluster for Lab with worker nodes in App Private Subnets and awareness of Public Subnets for ALBs, with SSH access"
+
+Parameters:
+  EKSClusterName:
+    Type: String
+    Default: sqlinjpr-eks-cluster
+    Description: "Name of the EKS cluster"
+  EKSClusterVersion:
+    Type: String
+    Default: "1.30"
+    Description: "Kubernetes version for the EKS cluster and nodegroup."
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "ID of your existing VPC"
+  AppPrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: "ID of your first Private Subnet for App/EKS Nodes"
+  AppPrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: "ID of your second Private Subnet for App/EKS Nodes"
+  PublicSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: "ID of your first Public Subnet"
+  PublicSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: "ID of your second Public Subnet"
+  NodeInstanceType:
+    Type: String
+    Default: t3.micro
+    Description: "EC2 instance type for EKS worker nodes."
+  NodeAMI:
+    Type: String
+    Default: "AL2023_x86_64_STANDARD"
+    Description: "AMI type for the EKS managed node group."
+  NodeDesiredCount:
+    Type: Number
+    Default: 1
+    Description: "Desired number of worker nodes."
+  NodeMinCount:
+    Type: Number
+    Default: 1
+    Description: "Minimum number of worker nodes."
+  NodeMaxCount:
+    Type: Number
+    Default: 2
+    Description: "Maximum number of worker nodes."
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Name of an existing EC2 KeyPair to enable SSH access to the EKS instances. Ensure it exists in the region."
+  MySshAccessCIDR: 
+    Type: String
+    Default: "0.0.0.0/0" # WARNING: Allows SSH from ANY IP. Change to your specific IP/CIDR for better security.
+    Description: "CIDR block for SSH access to the EKS worker nodes. Example: YourPublicIP/32"
+
+
+Resources:
+  # --- EKS Cluster IAM Role ---
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EKSClusterName}-ClusterRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "eks.amazonaws.com"
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+
+  # --- EKS Cluster Security Group (for control plane) ---
+  EKSClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${EKSClusterName}-ClusterSG"
+      VpcId: !Ref VpcId
+      GroupDescription: "Security group for EKS Cluster control plane"
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EKSClusterName}-ClusterSG"
+
+  # --- EKS Cluster ---
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      Version: !Ref EKSClusterVersion
+      RoleArn: !GetAtt EKSClusterRole.Arn
+      ResourcesVpcConfig:
+        SubnetIds:
+          - !Ref AppPrivateSubnet1Id
+          - !Ref AppPrivateSubnet2Id
+          - !Ref PublicSubnet1Id
+          - !Ref PublicSubnet2Id
+        SecurityGroupIds:
+          - !GetAtt EKSClusterSecurityGroup.GroupId
+        EndpointPublicAccess: true
+        EndpointPrivateAccess: true
+
+  # --- EKS Node Group IAM Role ---
+  NodeGroupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EKSClusterName}-NodeGroupRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+
+  # --- EKS Node Security Group ---
+  EKSNodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${EKSClusterName}-NodeSG"
+      VpcId: !Ref VpcId
+      GroupDescription: "Security group for EKS Worker Nodes"
+      # Ingress rule for SSH will be added separately below
+      Tags:
+        - Key: Name
+          Value: !Sub "${EKSClusterName}-NodeSG"
+        - Key: !Sub "kubernetes.io/cluster/${EKSClusterName}"
+          Value: "owned"
+
+  # SG Rule: Nodes to Cluster API (HTTPS)
+  EKSNodeToClusterIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: "Allow EKS Nodes to connect to EKS Control Plane API"
+      GroupId: !GetAtt EKSClusterSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+
+  # SG Rule: Cluster to Nodes (Kubelet & others)
+  EKSClusterToNodeIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: "Allow EKS Control Plane to communicate with Kubelet on Nodes"
+      GroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 1025
+      ToPort: 65535
+      SourceSecurityGroupId: !GetAtt EKSClusterSecurityGroup.GroupId
+
+  # SG Rule: Nodes to Nodes (All traffic within the Node SG)
+  EKSNodeToNodeIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: "Allow EKS Nodes to communicate with each other for pod networking"
+      GroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+
+  # SG Rule: SSH access to EKS Nodes <<< NEW RULE
+  EKSNodeSshIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: "Allow SSH access to EKS Worker Nodes from specified CIDR"
+      GroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref MySshAccessCIDR
+
+  # SG Rule: Node Outbound (To Internet via NAT & other AWS services)
+  EKSNodeOutbound:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: "Allow EKS Nodes outbound access to internet and AWS services"
+      GroupId: !GetAtt EKSNodeSecurityGroup.GroupId
+      IpProtocol: "-1"
+      CidrIp: "0.0.0.0/0"
+
+  # --- EKS Managed Node Group ---
+  EKSManagedNodeGroup:
+    Type: AWS::EKS::Nodegroup
+    DependsOn:
+      - EKSCluster
+      - NodeGroupRole
+    Properties:
+      ClusterName: !Ref EKSClusterName
+      NodegroupName: !Sub "${EKSClusterName}-minimal-ng"
+      NodeRole: !GetAtt NodeGroupRole.Arn
+      Subnets:
+        - !Ref AppPrivateSubnet1Id
+        - !Ref AppPrivateSubnet2Id
+      InstanceTypes: [!Ref NodeInstanceType]
+      AmiType: !Ref NodeAMI
+      DiskSize: 20 # GB
+      ScalingConfig:
+        MinSize: !Ref NodeMinCount
+        MaxSize: !Ref NodeMaxCount
+        DesiredSize: !Ref NodeDesiredCount
+      RemoteAccess: # <<< UNCOMMENTED
+        Ec2SshKey: !Ref KeyPairName
+        # SourceSecurityGroups: [ !GetAtt YourBastionSG.GroupId ] # If you have a specific bastion SG
+      Tags:
+        Name: !Sub "${EKSClusterName}-Node"
+        Purpose: "SQLInjectionLab-EKSNode"
+
+Outputs:
+  EKSClusterNameOutput:
+    Description: "EKS Cluster Name"
+    Value: !Ref EKSCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-EKSClusterName"
+  EKSClusterEndpoint:
+    Description: "EKS Cluster Endpoint URL"
+    Value: !GetAtt EKSCluster.Endpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-EKSClusterEndpoint"
+  EKSNodeRoleArn:
+    Description: "IAM Role ARN for the EKS Worker Nodes"
+    Value: !GetAtt NodeGroupRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EKSNodeRoleArn"
+  EKSClusterSecurityGroupId:
+    Description: "Security Group ID for the EKS Control Plane"
+    Value: !GetAtt EKSClusterSecurityGroup.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-EKSClusterSGId"
+  EKSNodeSecurityGroupId:
+    Description: "Security Group ID for the EKS Worker Nodes"
+    Value: !GetAtt EKSNodeSecurityGroup.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-EKSNodeSGId"

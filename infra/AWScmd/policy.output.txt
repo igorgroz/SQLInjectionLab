@@ -1,0 +1,2 @@
+arn:aws:iam::510151297987:policy/AWSLoadBalancerControllerIAMPolicy-Lab
+arn:aws:iam::510151297987:policy/ExternalSecretsOperatorSecretsManagerPolicy-Lab
