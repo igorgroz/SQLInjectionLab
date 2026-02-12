@@ -1,2 +1,13 @@
-arn:aws:iam::510151297987:policy/AWSLoadBalancerControllerIAMPolicy-Lab
-arn:aws:iam::510151297987:policy/ExternalSecretsOperatorSecretsManagerPolicy-Lab
+LBC IAM Policy Created:
+ARN: arn:aws:iam::510151297987:policy/AWSLoadBalancerControllerIAMPolicy-Lab
+
+ESO IAM Policy Created:
+ARN: arn:aws:iam::510151297987:policy/ExternalSecretsOperatorSecretsManagerPolicy-Lab
+
+ESO IAM Role Created (with initial trust policy) ESO_IAM_ROLE_ARN: 
+arn:aws:iam::510151297987:role/ExternalSecretsOperatorIAMRole-sqlinjpr-lab-eks
+
+Policy ARN: arn:aws:iam::510151297987:policy/SqlInjBackendNamespaceSecretsPolicy
+Role ARN: arn:aws:iam::510151297987:role/SqlInjBackendNamespaceIAMRole-sqlinjpr-lab-eks
+
+

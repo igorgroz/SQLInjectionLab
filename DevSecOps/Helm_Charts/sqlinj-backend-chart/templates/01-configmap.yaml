@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-app-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "sqlinj-backend-chart.name" . }}
+    helm.sh/chart: {{ include "sqlinj-backend-chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  DB_HOST: {{ .Values.config.dbHost | quote }}
+  DB_PORT: {{ .Values.config.dbPort | quote }}
+  DB_NAME: {{ .Values.config.dbName | quote }}
+  DB_SSL: {{ .Values.config.dbSsl | quote }}
+  JWT_EXPIRATION: {{ .Values.config.jwtExpiration | quote }}
+  PORT: {{ .Values.config.containerPort | quote }}

@@ -30,3 +30,9 @@ Vulnerable Endpoints: Try injecting malicious SQL queries into the userid and cl
 GET http://localhost:5001/users/1/clothes?userid=1; DELETE FROM user_clothes; --
 POST http://localhost:5001/users/1/clothes { "clothid": "1; DROP TABLE user_clothes; --" }
 Safe Endpoints: The safe versions (safe-clothes) will not be vulnerable to SQL injection because they use parameterized queries.
+
+********************** How to simulate the SQL injetion exploit *******************
+
+In http://localhost:3000/fetch-user-clothing-rest here is a sample line to inject and then press "Add Cloth (Insecure REST)"
+9'); INSERT INTO users (name, surname) VALUES ('Alex2', 'Jones2'); --
+************************************************************************************

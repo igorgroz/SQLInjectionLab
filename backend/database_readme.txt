@@ -1,4 +1,10 @@
-qlinjproject=# \du
+To open the database:
+
+>psql -d sqlinjproject -U igorgrozdanov
+
+
+
+sqlinjproject=# \du
                                      List of roles
    Role name   |                         Attributes                         | Member of 
 ---------------+------------------------------------------------------------+-----------
@@ -22,6 +28,9 @@ sqlinjproject=# select * from users;
       4 | Bob     | Brown
       5 | Charlie | Williams
 (5 rows)
+
+
+
 
 sqlinjproject=# select * from user_clothes;
  id | userid | clothid 
@@ -55,3 +64,7 @@ sqlinjproject=# select * from clothes;
        8 | Socks       | Gray  | HM     | M        | Cotton
        9 | Sneakers    | White | Nike   | 10       | Leather
       10 | Shorts      | Black | Zara   | M        | Polyester
+
+
+To connect to RDS database in AWS run following command:
+psql -h sqlinjproject-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com -U sql_lab_user -d sqlinjproject

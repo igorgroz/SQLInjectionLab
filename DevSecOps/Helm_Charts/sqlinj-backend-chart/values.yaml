@@ -11,73 +11,84 @@ replicaCount: 1
 image:
   repository: "510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/my-sqlinj-backend" # Your ECR repo URI
   pullPolicy: IfNotPresent
-  # tag: "latest" # Default to latest, can be overridden at install/upgrade
-  tag: "1205251806" # Or pin to your specific timestamped tag for this version
+  tag: "1305252312" # Your specific timestamped tag (or "latest" if you prefer for dev)
+
+# ServiceAccount for the main application pods.
+# The annotations for IRSA will be set via --set commands in your deploy script.
+# If your chart also creates the ServiceAccount for the SecretStore, this might need adjustments.
+# Based on your script, the application deployment's SA is for IRSA for the SecretStore.
+serviceAccount:
+  create: true # Helm chart will create this service account
+  name: "sqlinj-backend-secrets-sa" # This name will be used by the chart and referenced by SecretStore
+  annotations: {} # Annotations like IRSA role ARN are typically set by the deploy script via --set
 
 # Application specific configuration (mirrors your .env structure)
 config:
   containerPort: 5001 # Port your application listens on
-  dbHost: "sqlinjproject-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com" # ** YOUR RDS ENDPOINT **
+  dbHost: "sqlinjproject-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com"
   dbPort: "5432"
   dbName: "sqlinjproject"
-  dbSsl: "true" # Use "true" for RDS, your app should handle this
+  dbSsl: "true" # Ensure your app handles this (e.g., sets sslmode=require)
   jwtExpiration: "3600"
 
 # Secrets Management (for ExternalSecrets Operator)
+# These are the names of your secrets in AWS Secrets Manager
 awsSecrets:
-  dbSecretNameInSM: "sqlinjproject-db-secret" # Name of DB secret in AWS Secrets Manager
-  jwtSecretNameInSM: "jwt-secret"            # Name of JWT secret in AWS Secrets Manager
+  dbSecretNameInSM: "sqlinjproject-db-secret"
+  jwtSecretNameInSM: "jwt-secret"
 
-  # Names for the Kubernetes Secrets that ESO will create from the above
+  # These are the names for the Kubernetes Secrets that ESO will create in your app's namespace
+  # Your ExternalSecret resources in the chart will reference these.
   k8sDbSecretName: "backend-db-credentials"
   k8sJwtSecretName: "backend-jwt-secret"
 
 # SecretStore configuration (used by ExternalSecret resources in this chart)
+# This SecretStore will be created in your application's namespace.
 secretStore:
-  name: "aws-app-secrets-store" # Name for the SecretStore CR created by this chart
-  # Details of the ServiceAccount used by the ExternalSecretsOperator controller
-  # This SA (in 'external-secrets' namespace) needs IRSA permissions to AWS Secrets Manager
-  esoControllerServiceAccountName: "external-secrets"
-  esoControllerServiceAccountNamespace: "external-secrets"
+  name: "aws-app-secrets-store"
+  # The serviceAccountRefName should match the name of the SA created above (or by --set serviceAccount.name)
+  # This SA (sqlinj-backend-secrets-sa) will be annotated with the IAM Role ARN for AWS SM access.
+  serviceAccountRefName: "sqlinj-backend-secrets-sa"
 
 # Kubernetes Service configuration
 service:
   type: ClusterIP
   port: 80 # Port the K8s service will expose
+  internalPort: 5001 # Port your application container actually listens on (targetPort)
 
 # Kubernetes Ingress configuration (for AWS Load Balancer Controller)
 ingress:
   enabled: true
-  className: "alb"
+  className: "alb" # Ensures AWS LBC handles this Ingress
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    # For HTTPS (optional, requires ACM certificate):
+    # For HTTPS (optional, requires ACM certificate and listener config on ALB):
     # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     # alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-southeast-2:510151297987:certificate/YOUR-ACM-CERT-ID"
     # alb.ingress.kubernetes.io/ssl-redirect: '443'
   path: "/api" # Base path for your backend API (e.g., my-alb.com/api/users)
-  pathType: Prefix
+  pathType: Prefix # Or ImplementationSpecific if LBC version supports it for more flexible path matching
 
 # Pod Resource requests and limits
-resources: {}
-  # limits:
-  #   cpu: "0.5" # 0.5 vCPU
-  #   memory: "512Mi"
-  # requests:
-  #   cpu: "0.25"
-  #   memory: "256Mi"
+resources:
+  limits:
+    cpu: "500m"    # 0.5 vCPU
+    memory: "512Mi" # 512 Megabytes
+  requests:
+    cpu: "100m"    # 0.1 vCPU
+    memory: "256Mi" # 256 Megabytes
 
 # Liveness and Readiness Probes for your application
 livenessProbe:
-  path: "/healthz" # ** IMPLEMENT THIS HTTP GET ENDPOINT IN YOUR APP **
-  initialDelaySeconds: 45 # Give more time for initial startup
+  path: "/healthz" # Ensure your app has a GET /healthz endpoint returning 200 OK
+  initialDelaySeconds: 45
   periodSeconds: 20
   timeoutSeconds: 5
   failureThreshold: 3
 
 readinessProbe:
-  path: "/readyz" # ** IMPLEMENT THIS HTTP GET ENDPOINT IN YOUR APP **
+  path: "/readyz" # Ensure your app has a GET /readyz endpoint returning 200 OK
   initialDelaySeconds: 20
   periodSeconds: 10
   timeoutSeconds: 5
