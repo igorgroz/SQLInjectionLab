@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
+
 import Menu from "./components/Menu";
 import ListUsersRESTPage from "./pages/ListUsersRESTPage";
 import ListUsersGraphQLPage from "./pages/ListUsersGraphQLPage";
@@ -8,6 +10,7 @@ import FetchUserClothesGraphQLPage from "./pages/FetchUserClothesGraphQLPage";
 import SecureUserDetailsRESTPage from "./pages/SecureUserDetailsRESTPage";
 import SecureUserDetailsGraphQLPage from "./pages/SecureUserDetailsGraphQLPage";
 
+import { loginRequest } from "./auth/authConfig";
 import "./App.css";
 
 const Home = () => (
@@ -18,32 +21,44 @@ const Home = () => (
 );
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // Assume user is authenticated for now
-  const [user, setUser] = useState(null); // You can mock user info or leave as null
+  const { instance, accounts } = useMsal();
+  const isAuthenticated = accounts && accounts.length > 0;
 
-  // Disable the login check for now
-  useEffect(() => {
-    // Just assume a mock user or leave it null
-    setUser({ name: "Mock User", id: "1234" });
-    setIsAuthenticated(true); // Assume user is logged in
-  }, []);
-
-  // Remove login logic temporarily
-  const login = () => {
-    console.log("Login is disabled for now.");
+  const login = async () => {
+    try {
+      await instance.loginRedirect(loginRequest);
+    } catch (error) {
+      console.error("Login error:", error);
+    }
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await instance.logoutRedirect({ postLogoutRedirectUri: "/" });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   return (
     <Router>
       <div className="app-container">
         {isAuthenticated ? <Menu /> : null}
+
         <div className="main-content">
-          <h1>API Security Testing</h1>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h1>API Security Testing</h1>
+
+            {isAuthenticated ? (
+              <div>
+                <span style={{ marginRight: 12 }}>
+                  Signed in as: {accounts[0]?.username}
+                </span>
+                <button onClick={logout}>Logout</button>
+              </div>
+            ) : null}
+          </div>
+
           {isAuthenticated ? (
             <Routes>
               <Route path="/" element={<Home />} />
@@ -57,8 +72,7 @@ const App = () => {
           ) : (
             <div>
               <h2>Please log in to access the API testing.</h2>
-              {/* Remove the login button */}
-              {/* <button onClick={login}>Login with MS Entra ID</button> */}
+              <button onClick={login}>Login with Microsoft Entra ID</button>
             </div>
           )}
         </div>

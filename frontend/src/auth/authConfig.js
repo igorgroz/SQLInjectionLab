@@ -7,11 +7,15 @@ const msalConfig = {
     redirectUri: "http://localhost:3000",
   },
   cache: {
+    // For lab purposes this is fine; you can switch to sessionStorage later
     cacheLocation: "localStorage",
     storeAuthStateInCookie: true,
   },
 };
 
-
 export const msalInstance = new PublicClientApplication(msalConfig);
-  
+
+// Minimal OIDC scopes. Add API scopes later when you protect backend endpoints.
+export const loginRequest = {
+  scopes: ["openid", "profile", "email"],
+};
