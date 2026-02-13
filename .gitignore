@@ -5,3 +5,5 @@ __pycache__/
 *.log
 infra/OpenVPN/*.dmg
 *.dmg
+infra/OpenVPN/*.dmg
+*.dmg
