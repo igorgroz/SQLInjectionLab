@@ -67,7 +67,7 @@ const App = () => {
         });
 
         // IMPORTANT: for a real protected backend you want an access token issued for your API scope.
-        // For Phase 1 confirmation, we attach accessToken if present, else fall back to idToken.
+        // For Phase 1 confirmation, we are attaching accessToken if present, else fall back to idToken.
         const hasAccessToken =
           tokenResponse.accessToken && tokenResponse.accessToken.length > 0;
 
