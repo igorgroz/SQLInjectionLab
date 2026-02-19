@@ -3,24 +3,64 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 
-import { ApolloClient, InMemoryCache, ApolloProvider } from "@apollo/client";
+import {
+  ApolloClient,
+  InMemoryCache,
+  ApolloProvider,
+  createHttpLink,
+} from "@apollo/client";
+import { setContext } from "@apollo/client/link/context";
+
 import config from "./config";
 
 import { MsalProvider } from "@azure/msal-react";
-import { msalInstance } from "./auth/authConfig";
+import { msalInstance, loginRequest } from "./auth/authConfig";
+
+const httpLink = createHttpLink({
+  uri: config.GRAPHQL_ENDPOINT,
+});
+
+const authLink = setContext(async (_, { headers }) => {
+  const accounts = msalInstance.getAllAccounts();
+  if (!accounts || accounts.length === 0) {
+    return { headers };
+  }
+
+  try {
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+      account: accounts[0],
+      scopes: loginRequest.scopes,
+    });
+
+    // For proper API protection later, you should request an API scope so accessToken is for YOUR backend.
+    // For now (Phase 1 visibility), we attach accessToken if present, otherwise fall back to idToken.
+    const bearer =
+      tokenResponse.accessToken && tokenResponse.accessToken.length > 0
+        ? tokenResponse.accessToken
+        : tokenResponse.idToken;
+
+    return {
+      headers: {
+        ...headers,
+        Authorization: `Bearer ${bearer}`,
+      },
+    };
+  } catch (e) {
+    console.error("Apollo authLink token error:", e);
+    return { headers };
+  }
+});
 
 const client = new ApolloClient({
-  uri: config.GRAPHQL_ENDPOINT,
+  link: authLink.concat(httpLink),
   cache: new InMemoryCache(),
 });
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 (async () => {
-  // Required for newer MSAL versions before login/redirect flows
   await msalInstance.initialize();
 
-  // Processes the redirect response after loginRedirect()
   await msalInstance.handleRedirectPromise().catch((e) => {
     console.error("MSAL redirect handling error:", e);
   });
