@@ -10,7 +10,7 @@ const SecureUserDetailsRESTPage = () => {
   const [newClothId, setNewClothId] = useState('');
   const [removeClothId, setRemoveClothId] = useState('');
   const [requestDetails, setRequestDetails] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   const { userid } = useParams();
   const parsedUserId = parseInt(userid, 10);
@@ -30,12 +30,14 @@ const SecureUserDetailsRESTPage = () => {
       setUserDetails(userResponse.data || {});
 
       const clothesResponse = await axios.get(REST_API_URL_CLOTHES, headers);
-      setClothes(clothesResponse.data || []);
+      setClothes(Array.isArray(clothesResponse.data) ? clothesResponse.data : []);
 
-      setError("");
+      setError('');
     } catch (err) {
       console.error('Error fetching secure REST data:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setUserDetails({});
+      setClothes([]);
     }
   };
 
@@ -45,8 +47,9 @@ const SecureUserDetailsRESTPage = () => {
     }
   }, [userid]);
 
+  // Secure button: goes to secure endpoint with auth headers
   const handleUpdateCloth = async () => {
-    const payload = { userid: parsedUserId, clothid: parseInt(newClothId, 10) };
+    const payload = { userid: parsedUserId, clothid: newClothId };
 
     try {
       const headers = await getAuthHeaders();
@@ -61,9 +64,9 @@ const SecureUserDetailsRESTPage = () => {
 
       setNewClothId('');
       fetchData();
-      setError("");
+      setError('');
     } catch (err) {
-      console.error('Error updating cloth:', err);
+      console.error('Error updating cloth securely:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setRequestDetails({
         method: 'POST',
@@ -74,8 +77,9 @@ const SecureUserDetailsRESTPage = () => {
     }
   };
 
+  // Red button: intentionally sends raw input to insecure endpoint
   const handleUpdateClothIns = async () => {
-    const payload = { userid: parsedUserId, clothid: parseInt(newClothId, 10) };
+    const payload = { userid: parsedUserId, clothid: newClothId };
 
     try {
       const response = await axios.post(REST_API_UPDATE_CLOTH_INS, payload);
@@ -89,8 +93,10 @@ const SecureUserDetailsRESTPage = () => {
 
       setNewClothId('');
       fetchData();
+      setError('');
     } catch (err) {
       console.error('Error updating cloth insecurely:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setRequestDetails({
         method: 'POST',
         url: REST_API_UPDATE_CLOTH_INS,
@@ -101,7 +107,7 @@ const SecureUserDetailsRESTPage = () => {
   };
 
   const handleRemoveCloth = async () => {
-    const payload = { userid: parsedUserId, clothid: parseInt(removeClothId, 10) };
+    const payload = { userid: parsedUserId, clothid: removeClothId };
 
     try {
       const headers = await getAuthHeaders();
@@ -116,9 +122,9 @@ const SecureUserDetailsRESTPage = () => {
 
       setRemoveClothId('');
       fetchData();
-      setError("");
+      setError('');
     } catch (err) {
-      console.error('Error removing cloth:', err);
+      console.error('Error removing cloth securely:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setRequestDetails({
         method: 'POST',
@@ -135,11 +141,11 @@ const SecureUserDetailsRESTPage = () => {
       <h1>User Clothes Information from Secure REST API</h1>
 
       <p>
-        <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
+        <strong>Signed in user:</strong> {getAccount()?.username || 'Not signed in'}
       </p>
 
       {error && (
-        <div style={{ color: "red", marginBottom: "15px" }}>
+        <div style={{ color: 'red', marginBottom: '15px' }}>
           <strong>Error:</strong> {error}
         </div>
       )}
@@ -149,7 +155,7 @@ const SecureUserDetailsRESTPage = () => {
       </p>
 
       <ul>
-        {clothes.map((cloth) => (
+        {(clothes || []).map((cloth) => (
           <li key={cloth.clothid}>
             <b>clothid:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
           </li>
@@ -171,9 +177,16 @@ const SecureUserDetailsRESTPage = () => {
             <button onClick={handleUpdateCloth}>Add Cloth (Secure REST)</button>
             <button
               onClick={handleUpdateClothIns}
-              style={{ backgroundColor: 'red', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', marginLeft: '10px' }}
+              style={{
+                backgroundColor: 'red',
+                color: 'white',
+                padding: '10px',
+                border: 'none',
+                borderRadius: '5px',
+                marginLeft: '10px',
+              }}
             >
-              Add Cloth (Insecure REST)
+              Add Cloth (Vulnerable REST)
             </button>
           </div>
         </details>
@@ -195,7 +208,14 @@ const SecureUserDetailsRESTPage = () => {
       <details open>
         <summary>Last API Call Details</summary>
         {requestDetails && (
-          <div style={{ marginTop: '20px', padding: '10px', border: '1px solid blue', backgroundColor: '#f0f8ff' }}>
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '10px',
+              border: '1px solid blue',
+              backgroundColor: '#f0f8ff',
+            }}
+          >
             <p><strong>REST API Endpoint:</strong> {requestDetails.url}</p>
             <p><strong>Method:</strong> {requestDetails.method}</p>
             <p><strong>Request Body:</strong></p>

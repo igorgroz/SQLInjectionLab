@@ -19,16 +19,18 @@ const ListUsersRESTPage = () => {
 
         const response = await axios.get(REST_API_URL, headers);
 
-        setUsers(response.data);
+        setUsers(Array.isArray(response.data) ? response.data : []);
         setRequestDetails({
           method: 'GET',
           url: REST_API_URL,
           serverResponse: JSON.stringify(response.data, null, 2),
         });
+
         setError("");
       } catch (err) {
-        console.error('Error fetching users from secure REST API:', err);
+        console.error('Error fetching users from authenticated REST API:', err);
         setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+        setUsers([]);
         setRequestDetails({
           method: 'GET',
           url: REST_API_URL,
@@ -42,7 +44,11 @@ const ListUsersRESTPage = () => {
 
   return (
     <div>
-      <h1>Users from Secure REST API</h1>
+      <h1>Users from Authenticated REST API</h1>
+
+      <p style={{ marginBottom: "16px", color: "#444" }}>
+        Authentication required (Microsoft Entra ID). Click a user to view details.
+      </p>
 
       <p>
         <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
@@ -54,14 +60,18 @@ const ListUsersRESTPage = () => {
         </div>
       )}
 
-      <ul>
+      <ul style={{ paddingLeft: "20px" }}>
         {users.map((user) => (
-          <li key={user.userid}>
+          <li key={user.userid} style={{ marginBottom: "10px" }}>
             <Link
               to={`/safe-users-rest/${user.userid}`}
-              style={{ textDecoration: 'none', color: 'inherit' }}
+              style={{
+                textDecoration: 'none',
+                color: '#0b57d0',
+                fontWeight: '600',
+              }}
             >
-              <b>UserID:</b> {user.userid} <b>Name:</b> {user.name} <b>Surname:</b> {user.surname}
+              UserID: {user.userid} Name: {user.name} Surname: {user.surname}
             </Link>
           </li>
         ))}
@@ -74,7 +84,9 @@ const ListUsersRESTPage = () => {
             <p><strong>REST API Endpoint:</strong> {requestDetails.url}</p>
             <p><strong>Method:</strong> {requestDetails.method}</p>
             <h3>Server Response:</h3>
-            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{requestDetails.serverResponse}</pre>
+            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>
+              {requestDetails.serverResponse}
+            </pre>
           </div>
         )}
       </details>

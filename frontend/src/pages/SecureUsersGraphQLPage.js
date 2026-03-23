@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { Link } from 'react-router-dom';
+import { getAccount } from '../auth/authHeaders';
 
-const GET_INSECURE_USERS = gql`
+const GET_SAFE_USERS = gql`
   query {
-    getInsecureUsers {
+    getSafeUsers {
       userid
       name
       surname
@@ -12,13 +13,13 @@ const GET_INSECURE_USERS = gql`
   }
 `;
 
-const ListUsersGraphQLPage = () => {
-  const { data, loading, error } = useQuery(GET_INSECURE_USERS);
+const SecureUsersGraphQLPage = () => {
+  const { data, loading, error } = useQuery(GET_SAFE_USERS);
 
   const [requestDetails, setRequestDetails] = useState({
-    url: 'http://localhost:5001/graphql-insecure',
+    url: 'http://localhost:5001/graphql-secure',
     method: 'POST',
-    body: JSON.stringify({ query: GET_INSECURE_USERS.loc.source.body }, null, 2),
+    body: JSON.stringify({ query: GET_SAFE_USERS.loc.source.body }, null, 2),
     response: null,
   });
 
@@ -36,17 +37,21 @@ const ListUsersGraphQLPage = () => {
 
   return (
     <div>
-      <h1>Users from Anonymous GraphQL API</h1>
+      <h1>Users from Authenticated GraphQL API</h1>
 
       <p style={{ marginBottom: "16px", color: "#444" }}>
-        No authentication required. Click a user to view details.
+        Authentication required. Click a user to view details.
+      </p>
+
+      <p>
+        <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
       </p>
 
       <ul style={{ paddingLeft: "20px" }}>
-        {data?.getInsecureUsers?.map((user) => (
+        {data?.getSafeUsers?.map((user) => (
           <li key={user.userid} style={{ marginBottom: "10px" }}>
             <Link
-              to={`/users-graphql/${user.userid}`}
+              to={`/safe-users-graphql/${user.userid}`}
               style={{
                 textDecoration: 'none',
                 color: '#0b57d0',
@@ -77,4 +82,4 @@ const ListUsersGraphQLPage = () => {
   );
 };
 
-export default ListUsersGraphQLPage;
+export default SecureUsersGraphQLPage;

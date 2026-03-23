@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+
+import { ApolloProvider } from '@apollo/client';
+import apolloClient from './apolloClient';
+
 import { MsalProvider } from '@azure/msal-react';
 import { msalInstance, initializeMsal } from './auth/authHeaders';
 
@@ -13,7 +17,9 @@ initializeMsal()
     root.render(
       <React.StrictMode>
         <MsalProvider instance={msalInstance}>
-          <App />
+          <ApolloProvider client={apolloClient}>
+            <App />
+          </ApolloProvider>
         </MsalProvider>
       </React.StrictMode>
     );

@@ -34,5 +34,6 @@ Safe Endpoints: The safe versions (safe-clothes) will not be vulnerable to SQL i
 ********************** How to simulate the SQL injetion exploit *******************
 
 In http://localhost:3000/fetch-user-clothing-rest here is a sample line to inject and then press "Add Cloth (Insecure REST)"
-9'); INSERT INTO users (name, surname) VALUES ('Alex2', 'Jones2'); --
+9'); INSERT INTO users (name, surname) VALUES ('Alex3', 'Jones3'); --
+10'); INSERT INTO users (name, surname) VALUES ('Pat', 'Noah'); --
 ************************************************************************************

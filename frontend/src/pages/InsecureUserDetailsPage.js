@@ -1,107 +1,171 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { gql, useQuery } from '@apollo/client';
+import { useParams } from 'react-router-dom';
 
-const REST_API_URL_CLOTHES = 'http://localhost:5001/api/insecure-users/2/clothes'; // Insecure REST API URL for user 2
-const REST_API_REMOVE_CLOTH = 'http://localhost:5001/api/insecure-users/remove-cloth'; // Insecure REST API URL for removing cloth
-const REST_API_UPDATE_CLOTH = 'http://localhost:5001/api/insecure-users/2/clothes'; // Insecure REST API URL for updating clothes
-
-// GraphQL Query for clothes by user
-const GET_INSECURE_CLOTHES_BY_USER = gql`
-  query {
-    getInsecureClothesByUser(userid: 2) {
-      userid
-      name
-      surname
-      clothid
-      description
-      color
-    }
-  }
-`;
-
-const InsecureUserDetailsPage = () => {
+const InSecureUserDetailsRESTPage = () => {
   const [clothes, setClothes] = useState([]);
-  const { data: graphQLData, loading: graphQLLoading, error: graphQLError } = useQuery(GET_INSECURE_CLOTHES_BY_USER);
+  const [userDetails, setUserDetails] = useState({});
   const [newClothId, setNewClothId] = useState('');
   const [removeClothId, setRemoveClothId] = useState('');
+  const [requestDetails, setRequestDetails] = useState(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    // Fetch clothes using REST API
-    axios.get(REST_API_URL_CLOTHES)
-      .then((response) => {
-        setClothes(response.data.clothes);
-      })
-      .catch((error) => console.error('Error fetching clothes from REST API:', error));
-  }, []);
+  const { userid } = useParams();
 
-  if (graphQLLoading) return <p>Loading...</p>;
-  if (graphQLError) return <p>Error: {graphQLError.message}</p>;
+  const REST_API_USER_DETAILS = `http://localhost:5001/api/insecure-users/${userid}`;
+  const REST_API_URL_CLOTHES = `http://localhost:5001/api/insecure-users/${userid}/clothes`;
+  const REST_API_UPDATE_CLOTH = `http://localhost:5001/api/insecure-users/clothes`;
+  const REST_API_REMOVE_CLOTH = `http://localhost:5001/api/insecure-users/remove-cloth`;
 
-  // Handle update cloth
-  const handleUpdateCloth = () => {
-    axios.post(REST_API_UPDATE_CLOTH, { clothid: newClothId })
-      .then((response) => {
-        alert(`Cloth updated: ${response.data.clothid}`);
-        setNewClothId('');
-      })
-      .catch((error) => console.error('Error updating cloth:', error));
+  const fetchData = async () => {
+    try {
+      const userResponse = await axios.get(REST_API_USER_DETAILS);
+      setUserDetails(userResponse.data || {});
+
+      const clothesResponse = await axios.get(REST_API_URL_CLOTHES);
+      setClothes(Array.isArray(clothesResponse.data) ? clothesResponse.data : []);
+
+      setError('');
+    } catch (err) {
+      console.error('Error fetching insecure REST data:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setUserDetails({});
+      setClothes([]);
+    }
   };
 
-  // Handle remove cloth
-  const handleRemoveCloth = () => {
-    axios.post(REST_API_REMOVE_CLOTH, { userid: 2, clothid: removeClothId })
-      .then((response) => {
-        alert(response.data.message);
-        setRemoveClothId('');
-      })
-      .catch((error) => console.error('Error removing cloth:', error));
+  useEffect(() => {
+    if (userid) {
+      fetchData();
+    }
+  }, [userid]);
+
+  // Intentionally raw input for SQLi lab
+  const handleUpdateCloth = async () => {
+    const payload = { userid, clothid: newClothId };
+
+    try {
+      const response = await axios.post(REST_API_UPDATE_CLOTH, payload);
+
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: JSON.stringify(response.data, null, 2),
+      });
+
+      setNewClothId('');
+      fetchData();
+      setError('');
+    } catch (err) {
+      console.error('Error updating cloth insecurely:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
+      });
+    }
+  };
+
+  // Intentionally raw input for SQLi lab
+  const handleRemoveCloth = async () => {
+    const payload = { userid, clothid: removeClothId };
+
+    try {
+      const response = await axios.post(REST_API_REMOVE_CLOTH, payload);
+
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_REMOVE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: JSON.stringify(response.data, null, 2),
+      });
+
+      setRemoveClothId('');
+      fetchData();
+      setError('');
+    } catch (err) {
+      console.error('Error removing cloth insecurely:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_REMOVE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
+      });
+    }
   };
 
   return (
     <div>
-      <h1>Insecure User Details</h1>
-      <h2>Clothes from REST API</h2>
+      <hr />
+      <h1>User Clothes Information from Insecure REST API</h1>
+
+      {error && (
+        <div style={{ color: 'red', marginBottom: '15px' }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      <p>
+        <b>UserID:</b> {userDetails.userid} <b>Name:</b> {userDetails.name} <b>Surname:</b> {userDetails.surname}
+      </p>
+
       <ul>
-        {clothes.map((cloth) => (
+        {(clothes || []).map((cloth) => (
           <li key={cloth.clothid}>
-            {cloth.description} - {cloth.color}
+            <b>clothid:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
           </li>
         ))}
       </ul>
 
-      <h2>Clothes from GraphQL API</h2>
-      <ul>
-        {graphQLData?.getInsecureClothesByUser?.map((cloth) => (
-          <li key={cloth.clothid}>
-            {cloth.description} - {cloth.color}
-          </li>
-        ))}
-      </ul>
+      <hr />
 
-      <div>
-        <h2>Update Clothes</h2>
-        <input
-          type="text"
-          value={newClothId}
-          onChange={(e) => setNewClothId(e.target.value)}
-          placeholder="Enter cloth ID to update"
-        />
-        <button onClick={handleUpdateCloth}>Update Cloth</button>
+      <div className="flex-container">
+        <details open>
+          <summary>Add Cloth Item</summary>
+          <div>
+            <input
+              type="text"
+              value={newClothId}
+              onChange={(e) => setNewClothId(e.target.value)}
+              placeholder="Enter clothID to add"
+            />
+            <button onClick={handleUpdateCloth}>Add Cloth (Insecure REST)</button>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Remove Cloth Item</summary>
+          <div>
+            <input
+              type="text"
+              value={removeClothId}
+              onChange={(e) => setRemoveClothId(e.target.value)}
+              placeholder="Enter clothID to remove"
+            />
+            <button onClick={handleRemoveCloth}>Remove Cloth (Insecure REST)</button>
+          </div>
+        </details>
       </div>
 
-      <div>
-        <h2>Remove Clothes</h2>
-        <input
-          type="text"
-          value={removeClothId}
-          onChange={(e) => setRemoveClothId(e.target.value)}
-          placeholder="Enter cloth ID to remove"
-        />
-        <button onClick={handleRemoveCloth}>Remove Cloth</button>
-      </div>
+      <details open>
+        <summary>Last API Call Details</summary>
+        {requestDetails && (
+          <div style={{ marginTop: '20px', padding: '10px', border: '1px solid blue', backgroundColor: '#f0f8ff' }}>
+            <p><strong>REST API Endpoint:</strong> {requestDetails.url}</p>
+            <p><strong>Method:</strong> {requestDetails.method}</p>
+            <p><strong>Request Body:</strong></p>
+            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{requestDetails.body}</pre>
+            <h3>Server Response:</h3>
+            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{requestDetails.serverResponse}</pre>
+          </div>
+        )}
+      </details>
     </div>
   );
 };
 
-export default InsecureUserDetailsPage;
+export default InSecureUserDetailsRESTPage;
