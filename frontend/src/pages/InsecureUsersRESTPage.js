@@ -1,23 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import config from '../config';
-import { getAuthHeaders, loginIfNeeded, getAccount } from '../auth/authHeaders';
 
-const ListUsersRESTPage = () => {
+const InsecureUsersRESTPage = () => {
   const [users, setUsers] = useState([]);
   const [requestDetails, setRequestDetails] = useState(null);
   const [error, setError] = useState("");
 
-  const REST_API_URL = config.REST_API_BASE_URL;
+  const REST_API_URL = "http://localhost:5001/api/insecure-users";
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        await loginIfNeeded();
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(REST_API_URL, headers);
+        const response = await axios.get(REST_API_URL);
 
         setUsers(response.data);
         setRequestDetails({
@@ -27,7 +22,7 @@ const ListUsersRESTPage = () => {
         });
         setError("");
       } catch (err) {
-        console.error('Error fetching users from secure REST API:', err);
+        console.error('Error fetching users from insecure REST API:', err);
         setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
         setRequestDetails({
           method: 'GET',
@@ -38,15 +33,11 @@ const ListUsersRESTPage = () => {
     };
 
     fetchUsers();
-  }, [REST_API_URL]);
+  }, []);
 
   return (
     <div>
-      <h1>Users from Secure REST API</h1>
-
-      <p>
-        <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
-      </p>
+      <h1>Users from Insecure REST API</h1>
 
       {error && (
         <div style={{ color: "red", marginBottom: "15px" }}>
@@ -58,7 +49,7 @@ const ListUsersRESTPage = () => {
         {users.map((user) => (
           <li key={user.userid}>
             <Link
-              to={`/safe-users-rest/${user.userid}`}
+              to={`/users-rest/${user.userid}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <b>UserID:</b> {user.userid} <b>Name:</b> {user.name} <b>Surname:</b> {user.surname}
@@ -82,4 +73,4 @@ const ListUsersRESTPage = () => {
   );
 };
 
-export default ListUsersRESTPage;
+export default InsecureUsersRESTPage;

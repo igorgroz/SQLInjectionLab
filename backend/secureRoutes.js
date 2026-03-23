@@ -1,178 +1,104 @@
 const express = require("express");
-const pool = require("./db");
 const router = express.Router();
+const pool = require("./db");
+const { requireJwt, requireScope } = require("./authJwt");
 
-// Secure GET endpoint to retrieve all users
-router.get("/safe-users", async (req, res) => {
+router.get("/safe-users", requireJwt, requireScope("user.read"), async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM users;");
-    res.json({ message: "Users retrieved", users: result.rows });
+    const result = await pool.query("SELECT * FROM users ORDER BY userid");
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error fetching safe users:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Secure GET endpoint to retrieve a specific user by ID
-router.get("/safe-users/:userid", async (req, res) => {
-  const { userid } = req.params;
-
+router.get("/safe-users/:userid", requireJwt, requireScope("user.read"), async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: `User with ID ${userid} not found` });
-    }
-
-    res.json({ message: "User retrieved successfully", user: result.rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Secure GET method to obtain user clothes
-router.get("/safe-users/:userid/clothes", async (req, res) => {
     const { userid } = req.params;
-  
-    try {
-      const result = await pool.query(
-        `SELECT u.userid, u.name, u.surname, c.clothid, c.description, c.color
-         FROM user_clothes uc 
-         JOIN clothes c ON uc.clothid = c.clothid
-         JOIN users u ON uc.userid = u.userid
-         WHERE uc.userid = $1`, 
-        [userid]
-      );
-  
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: `No clothes found for user with ID ${userid}` });
-      }
-  
-      res.json({ message: "Clothes retrieved successfully", clothes: result.rows });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-  
 
-/* Secure POST method to add a new cloth for a user - old method where userid was coming from a paramter
-router.post("/safe-users/:userid/clothes", async (req, res) => {
-  const { userid } = req.params;
-  const { clothid } = req.body;
-
-  // Check if the clothid is provided in the request body
-  if (!clothid) {
-    return res.status(400).json({ message: "Cloth ID is required" });
-  }
-
-  try {
-    // Check if the user exists
-    const userResult = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Insert a new entry in the user_clothes table
-    const insertResult = await pool.query(
-      "INSERT INTO user_clothes (userid, clothid) VALUES ($1, $2) RETURNING *",
-      [userid, clothid]
+    const result = await pool.query(
+      "SELECT * FROM users WHERE userid = $1",
+      [userid]
     );
 
-    res.json({ message: `Cloth ${clothid} added to user ${userid}'s wardrobe` });
+    res.json(result.rows[0] || null);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-*/
-
-// Secure POST method to add a new cloth for a user
-router.post("/safe-users/clothes", async (req, res) => {
-  const { userid, clothid } = req.body;
-
-  // Validate that both userid and clothid are provided
-  if (!userid || !clothid) {
-    return res.status(400).json({ message: "User ID and Cloth ID are required" });
-  }
-
-  try {
-    // Check if the user exists
-    const userResult = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Insert a new entry in the user_clothes table
-    const insertResult = await pool.query(
-      "INSERT INTO user_clothes (userid, clothid) VALUES ($1, $2) RETURNING *",
-      [userid, clothid]
-    );
-
-    res.json({ message: `Cloth ${clothid} added to user ${userid}'s wardrobe`, data: insertResult.rows[0] });
-  } catch (err) {
-    console.error("Error adding cloth:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error fetching safe user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-
-// Secure POST method to remove a cloth from a user's wardrobe
-router.post("/safe-users/remove-cloth", async (req, res) => {
-  const { userid, clothid } = req.body;
-
-  // Ensure both userid and clothid are provided in the body
-  if (!userid || !clothid) {
-    return res.status(400).json({ message: "Both userid and clothid are required" });
-  }
-
+router.get("/safe-users/:userid/clothes", requireJwt, requireScope("user.read"), async (req, res) => {
   try {
-    // Check if the user exists
-    const userResult = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const { userid } = req.params;
 
-    // Check if the cloth exists in the user's wardrobe
-    const clothResult = await pool.query(
-      "SELECT * FROM user_clothes WHERE userid = $1 AND clothid = $2",
-      [userid, clothid]
+    const result = await pool.query(
+      `
+      SELECT c.*
+      FROM clothes c
+      INNER JOIN user_clothes uc ON c.clothid = uc.clothid
+      WHERE uc.userid = $1
+      ORDER BY c.clothid
+      `,
+      [userid]
     );
-    if (clothResult.rowCount === 0) {
-      return res.status(404).json({ message: `Cloth ${clothid} not found in user ${userid}'s wardrobe` });
-    }
 
-    // Delete the cloth from the user's wardrobe
-    await pool.query("DELETE FROM user_clothes WHERE userid = $1 AND clothid = $2", [userid, clothid]);
-
-    res.json({ message: `Cloth ${clothid} removed from user ${userid}'s wardrobe` });
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error fetching safe user clothes:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Secure POST method to remove a user
-router.post("/safe-users/remove-user", async (req, res) => {
-  const { userid } = req.body;
-
-  // Ensure userid is provided in the body
-  if (!userid) {
-    return res.status(400).json({ message: "Userid is required" });
-  }
-
+router.post("/safe-users/clothes", requireJwt, requireScope("user.write"), async (req, res) => {
   try {
-    // Check if the user exists
-    const userResult = await pool.query("SELECT * FROM users WHERE userid = $1", [userid]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).json({ message: "User not found" });
+    const { userid, clothid } = req.body;
+
+    if (!userid || !clothid) {
+      return res.status(400).json({ error: "userid and clothid are required" });
     }
 
-    // Delete user's clothes first to maintain referential integrity
-    await pool.query("DELETE FROM user_clothes WHERE userid = $1", [userid]);
+    const result = await pool.query(
+      `
+      INSERT INTO user_clothes (userid, clothid)
+      VALUES ($1, $2)
+      RETURNING *
+      `,
+      [userid, clothid]
+    );
 
-    // Delete the user from the users table
-    await pool.query("DELETE FROM users WHERE userid = $1", [userid]);
-
-    res.json({ message: `User with userID ${userid} removed securely!` });
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error adding clothing safely:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/safe-users/remove-cloth", requireJwt, requireScope("user.write"), async (req, res) => {
+  try {
+    const { userid, clothid } = req.body;
+
+    if (!userid || !clothid) {
+      return res.status(400).json({ error: "userid and clothid are required" });
+    }
+
+    const result = await pool.query(
+      `
+      DELETE FROM user_clothes
+      WHERE userid = $1 AND clothid = $2
+      RETURNING *
+      `,
+      [userid, clothid]
+    );
+
+    res.json({
+      message: "Cloth removed safely",
+      removed: result.rows,
+    });
+  } catch (err) {
+    console.error("Error removing clothing safely:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

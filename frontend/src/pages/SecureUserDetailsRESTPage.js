@@ -1,179 +1,153 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
-import config from '../config'; // Import the config file
+import config from '../config';
+import { getAuthHeaders, loginIfNeeded, getAccount } from '../auth/authHeaders';
 
 const SecureUserDetailsRESTPage = () => {
   const [clothes, setClothes] = useState([]);
   const [userDetails, setUserDetails] = useState({});
   const [newClothId, setNewClothId] = useState('');
   const [removeClothId, setRemoveClothId] = useState('');
-  const [requestDetails, setRequestDetails] = useState(null); // State for API details
+  const [requestDetails, setRequestDetails] = useState(null);
+  const [error, setError] = useState("");
 
-  const { userid } = useParams(); // Get dynamic user ID from the URL
+  const { userid } = useParams();
   const parsedUserId = parseInt(userid, 10);
 
-  // REST API URLs
   const REST_API_URL_CLOTHES = `${config.REST_API_BASE_URL}/${parsedUserId}/clothes`;
   const REST_API_USER_DETAILS = `${config.REST_API_BASE_URL}/${parsedUserId}`;
   const REST_API_REMOVE_CLOTH = config.REMOVE_CLOTH_URL;
   const REST_API_UPDATE_CLOTH = `${config.REST_API_BASE_URL}/clothes`;
-  const REST_API_UPDATE_CLOTH_INS = `${config.REST_API_BASE_URL_INS}/clothes`; // Fixed extra '/'
+  const REST_API_UPDATE_CLOTH_INS = `${config.REST_API_BASE_URL_INS}/clothes`;
 
-  const fetchData = () => {
-    axios.get(REST_API_USER_DETAILS)
-      .then((response) => {
-        setUserDetails(response.data.user);
-        console.log('Fetching from', REST_API_USER_DETAILS);
-      })
-      .catch((error) => {
-        console.error('Error fetching user details:', REST_API_USER_DETAILS, error);
-      });
+  const fetchData = async () => {
+    try {
+      await loginIfNeeded();
+      const headers = await getAuthHeaders();
 
-    axios.get(REST_API_URL_CLOTHES)
-      .then((response) => {
-        setClothes(response.data.clothes);
-        console.log('Fetching from', REST_API_URL_CLOTHES);
-      })
-      .catch((error) => {
-        console.error('Error fetching clothes:', REST_API_URL_CLOTHES, error);
-      });
+      const userResponse = await axios.get(REST_API_USER_DETAILS, headers);
+      setUserDetails(userResponse.data || {});
+
+      const clothesResponse = await axios.get(REST_API_URL_CLOTHES, headers);
+      setClothes(clothesResponse.data || []);
+
+      setError("");
+    } catch (err) {
+      console.error('Error fetching secure REST data:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+    }
   };
 
   useEffect(() => {
     if (userid) {
       fetchData();
     }
-  }, [userid, REST_API_URL_CLOTHES, REST_API_USER_DETAILS]);
+  }, [userid]);
 
-  /* Handle update cloth (Secure)
-  const handleUpdateCloth = () => {
-    const payload = { clothid: newClothId };
+  const handleUpdateCloth = async () => {
+    const payload = { userid: parsedUserId, clothid: parseInt(newClothId, 10) };
 
-    console.log('API Endpoint:', REST_API_UPDATE_CLOTH);
-    console.log('POST Payload:', payload);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await axios.post(REST_API_UPDATE_CLOTH, payload, headers);
 
-    axios.post(REST_API_UPDATE_CLOTH, payload)
-      .then((response) => {
-        console.log('Server Response:', response);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: JSON.stringify(response.data, null, 2),
-        });
-        setNewClothId('');
-        fetchData(); // Refresh data
-      })
-      .catch((error) => {
-        console.error('Error updating cloth:', error);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: `Error: ${error.message}`,
-        });
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: JSON.stringify(response.data, null, 2),
       });
-  };
-  */
 
-  // Handle update cloth (Insecure)
-  const handleUpdateCloth = () => {
-    const payload = { userid: parsedUserId, clothid: newClothId };
-
-    console.log('API Endpoint:', REST_API_UPDATE_CLOTH);
-    console.log('POST Payload:', payload);
-
-    axios.post(REST_API_UPDATE_CLOTH, payload)
-      .then((response) => {
-        console.log('Server Response:', response);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: JSON.stringify(response.data, null, 2),
-        });
-        setNewClothId('');
-        fetchData(); // Refresh data
-      })
-      .catch((error) => {
-        console.error('Error updating cloth:', error);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: `Error: ${error.message}`,
-        });
+      setNewClothId('');
+      fetchData();
+      setError("");
+    } catch (err) {
+      console.error('Error updating cloth:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
       });
+    }
   };
 
-  // Handle update cloth (Insecure)
-  const handleUpdateClothIns = () => {
-    const payload = { userid: parsedUserId, clothid: newClothId };
+  const handleUpdateClothIns = async () => {
+    const payload = { userid: parsedUserId, clothid: parseInt(newClothId, 10) };
 
-    console.log('API Endpoint:', REST_API_UPDATE_CLOTH_INS);
-    console.log('POST Payload:', payload);
+    try {
+      const response = await axios.post(REST_API_UPDATE_CLOTH_INS, payload);
 
-    axios.post(REST_API_UPDATE_CLOTH_INS, payload)
-      .then((response) => {
-        console.log('Server Response:', response);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH_INS,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: JSON.stringify(response.data, null, 2),
-        });
-        setNewClothId('');
-        fetchData(); // Refresh data
-      })
-      .catch((error) => {
-        console.error('Error updating cloth:', error);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_UPDATE_CLOTH_INS,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: `Error: ${error.message}`,
-        });
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH_INS,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: JSON.stringify(response.data, null, 2),
       });
+
+      setNewClothId('');
+      fetchData();
+    } catch (err) {
+      console.error('Error updating cloth insecurely:', err);
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_UPDATE_CLOTH_INS,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
+      });
+    }
   };
 
-  // Handle remove cloth
-  const handleRemoveCloth = () => {
-    const payload = { userid: parsedUserId, clothid: removeClothId };
+  const handleRemoveCloth = async () => {
+    const payload = { userid: parsedUserId, clothid: parseInt(removeClothId, 10) };
 
-    console.log('API Endpoint:', REST_API_REMOVE_CLOTH);
-    console.log('POST Payload:', payload);
+    try {
+      const headers = await getAuthHeaders();
+      const response = await axios.post(REST_API_REMOVE_CLOTH, payload, headers);
 
-    axios.post(REST_API_REMOVE_CLOTH, payload)
-      .then((response) => {
-        console.log('Server Response:', response);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_REMOVE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: JSON.stringify(response.data, null, 2),
-        });
-        setRemoveClothId('');
-        fetchData(); // Refresh data
-      })
-      .catch((error) => {
-        console.error('Error removing cloth:', error);
-        setRequestDetails({
-          method: 'POST',
-          url: REST_API_REMOVE_CLOTH,
-          body: JSON.stringify(payload, null, 2),
-          serverResponse: `Error: ${error.message}`,
-        });
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_REMOVE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: JSON.stringify(response.data, null, 2),
       });
+
+      setRemoveClothId('');
+      fetchData();
+      setError("");
+    } catch (err) {
+      console.error('Error removing cloth:', err);
+      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
+      setRequestDetails({
+        method: 'POST',
+        url: REST_API_REMOVE_CLOTH,
+        body: JSON.stringify(payload, null, 2),
+        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
+      });
+    }
   };
 
   return (
     <div>
       <hr />
-      <h1>User Clothes Information from REST API</h1>
+      <h1>User Clothes Information from Secure REST API</h1>
+
+      <p>
+        <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
+      </p>
+
+      {error && (
+        <div style={{ color: "red", marginBottom: "15px" }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
       <p>
         <b>UserID:</b> {userDetails.userid} <b>Name:</b> {userDetails.name} <b>Surname:</b> {userDetails.surname}
       </p>
+
       <ul>
         {clothes.map((cloth) => (
           <li key={cloth.clothid}>
@@ -181,6 +155,7 @@ const SecureUserDetailsRESTPage = () => {
           </li>
         ))}
       </ul>
+
       <hr />
 
       <div className="flex-container">
@@ -193,10 +168,11 @@ const SecureUserDetailsRESTPage = () => {
               onChange={(e) => setNewClothId(e.target.value)}
               placeholder="Enter clothID to add"
             />
-            <button onClick={handleUpdateCloth}>Add Cloth (REST)</button>
-            <button 
-              onClick={handleUpdateClothIns} 
-              style={{ backgroundColor: 'red', color: 'white', padding: '10px', border: 'none', borderRadius: '5px' }}>
+            <button onClick={handleUpdateCloth}>Add Cloth (Secure REST)</button>
+            <button
+              onClick={handleUpdateClothIns}
+              style={{ backgroundColor: 'red', color: 'white', padding: '10px', border: 'none', borderRadius: '5px', marginLeft: '10px' }}
+            >
               Add Cloth (Insecure REST)
             </button>
           </div>
@@ -211,11 +187,11 @@ const SecureUserDetailsRESTPage = () => {
               onChange={(e) => setRemoveClothId(e.target.value)}
               placeholder="Enter clothID to remove"
             />
-            <button onClick={handleRemoveCloth}>Remove Cloth (REST)</button>
+            <button onClick={handleRemoveCloth}>Remove Cloth (Secure REST)</button>
           </div>
         </details>
       </div>
-      
+
       <details open>
         <summary>Last API Call Details</summary>
         {requestDetails && (

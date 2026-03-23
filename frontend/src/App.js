@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import axios from "axios";
 
 import Menu from "./components/Menu";
+import InsecureUsersRESTPage from "./pages/InsecureUsersRESTPage";
 import ListUsersRESTPage from "./pages/ListUsersRESTPage";
-import ListUsersGraphQLPage from "./pages/ListUsersGraphQLPage";
-import FetchUserClothesRESTPage from "./pages/FetchUserClothesRESTPage";
-import FetchUserClothesGraphQLPage from "./pages/FetchUserClothesGraphQLPage";
+import InSecureUserDetailsRESTPage from "./pages/InSecureUserDetailsRESTPage";
 import SecureUserDetailsRESTPage from "./pages/SecureUserDetailsRESTPage";
-import SecureUserDetailsGraphQLPage from "./pages/SecureUserDetailsGraphQLPage";
 
 import { loginRequest } from "./auth/authConfig";
 import "./App.css";
@@ -32,7 +30,7 @@ const App = () => {
   const isAuthenticated = accounts && accounts.length > 0;
 
   const [bearerPreview, setBearerPreview] = useState("");
-  const [bearerSource, setBearerSource] = useState(""); // "accessToken" or "idToken"
+  const [bearerSource, setBearerSource] = useState("");
 
   const login = async () => {
     try {
@@ -44,7 +42,6 @@ const App = () => {
 
   const logout = async () => {
     try {
-      // Clear axios default header on logout
       delete axios.defaults.headers.common.Authorization;
       setBearerPreview("");
       setBearerSource("");
@@ -55,7 +52,6 @@ const App = () => {
     }
   };
 
-  // Phase 1: acquire a token and attach it to ALL REST requests via axios default header
   useEffect(() => {
     const wireBearerToAxios = async () => {
       if (!isAuthenticated) return;
@@ -66,8 +62,6 @@ const App = () => {
           scopes: loginRequest.scopes,
         });
 
-        // IMPORTANT: for a real protected backend you want an access token issued for your API scope.
-        // For Phase 1 confirmation, we attach accessToken if present, else fall back to idToken.
         const hasAccessToken =
           tokenResponse.accessToken && tokenResponse.accessToken.length > 0;
 
@@ -90,7 +84,9 @@ const App = () => {
   return (
     <Router>
       <div className="app-container">
-        {isAuthenticated ? <Menu /> : null}
+        {isAuthenticated ? (
+          <Menu logout={logout} username={accounts[0]?.username} />
+        ) : null}
 
         <div className="main-content">
           <div
@@ -145,27 +141,20 @@ const App = () => {
           {isAuthenticated ? (
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/list-users-rest" element={<ListUsersRESTPage />} />
+
+              <Route path="/users-rest" element={<InsecureUsersRESTPage />} />
               <Route
-                path="/list-users-graphql"
-                element={<ListUsersGraphQLPage />}
+                path="/users-rest/:userid"
+                element={<InSecureUserDetailsRESTPage />}
               />
+
+              <Route path="/safe-users-rest" element={<ListUsersRESTPage />} />
               <Route
-                path="/fetch-user-clothing-rest"
-                element={<FetchUserClothesRESTPage />}
-              />
-              <Route
-                path="/fetch-user-clothing-graphql"
-                element={<FetchUserClothesGraphQLPage />}
-              />
-              <Route
-                path="/secure-user-details-rest/:userid"
+                path="/safe-users-rest/:userid"
                 element={<SecureUserDetailsRESTPage />}
               />
-              <Route
-                path="/secure-user-details-graphql/:userid"
-                element={<SecureUserDetailsGraphQLPage />}
-              />
+
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           ) : (
             <div>

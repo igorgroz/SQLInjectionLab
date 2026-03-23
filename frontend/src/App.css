@@ -1,128 +1,83 @@
-/* ------------------ */
-/* 🔹 BASE STYLES */
-/* ------------------ */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
+html, body, #root {
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f4f4f4;
-  color: #333;
-  display: flex;
+  min-height: 100%;
+  font-family: Arial, sans-serif;
 }
 
-/* ------------------ */
-/* 🔹 VERTICAL NAVIGATION MENU */
-/* ------------------ */
-nav {
+.app-container {
+  min-height: 100vh;
+  background: #efefef;
+}
+
+.sidebar {
   position: fixed;
-  left: 0;
   top: 0;
-  width: 250px;
-  height: 100%;
-  background-color: #007bff;
-  color: white;
-  padding-top: 20px;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+  left: 0;
+  width: 300px;
+  height: 100vh;
+  background: #1976e6;
+  color: #fff;
+  padding: 24px 18px;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
-nav ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
-}
-
-nav ul li {
-  padding: 8px 12px; /* Adjusted padding for better spacing */
-}
-
-nav ul li a {
-  text-decoration: none;
-  color: white;
-  font-weight: bold;
-  display: block;
-  padding: 8px 12px;
-  border-radius: 4px;
-  transition: background-color 0.3s ease;
-}
-
-nav ul li a:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-nav ul li a.active {
-  background-color: white;
-  color: #007bff;
-}
-
-/* ------------------ */
-/* 🔹 MAIN CONTENT FIX */
-/* ------------------ */
 .main-content {
-  margin-left: 270px;
-  padding: 25px;
-  transition: margin-left 0.3s ease-in-out;
-  flex-grow: 1;
+  margin-left: 300px;
+  min-height: 100vh;
+  padding: 28px 32px;
+  box-sizing: border-box;
+  background: #efefef;
 }
 
-/* ------------------ */
-/* 🔹 PAGE CONTAINERS */
-/* ------------------ */
-.container {
-  max-width: 960px;
-  margin: 25px auto;
-  padding: 25px;
-  background-color: #fff;
+.menu-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.menu-link {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  margin-bottom: 14px;
   border-radius: 8px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
-  border: 1px solid #ddd; /* Add border for better definition */
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+  background: #2b80df;
 }
 
-/* ------------------ */
-/* 🔹 DETAILS SUMMARY STYLING */
-/* ------------------ */
-details summary {
-  font-size: 24px;  /* Larger font */
-  font-weight: bold;
-  padding: 12px 0;
+.menu-link.active {
+  background: #4caf50;
+}
+
+.menu-bottom {
+  margin-top: 28px;
+}
+
+.menu-user {
+  margin-bottom: 18px;
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.menu-button {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #4caf50;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
   cursor: pointer;
-  color: #007bff;
-  border-bottom: 2px solid #007bff; /* Separator line */
 }
 
-details {
-  padding: 20px;
-  border: 2px solid #007bff;
-  border-radius: 8px;
-  background-color: #f0f8ff;
-  margin-bottom: 25px;
-}
-
-/* ------------------ */
-/* 🔹 RESPONSIVE DESIGN */
-/* ------------------ */
-@media (max-width: 768px) {
-  nav {
-    width: 200px;
-  }
-
-  .main-content {
-    margin-left: 220px;
-  }
-}
-
-@media (max-width: 600px) {
-  nav {
-    width: 100%;
-    height: auto;
-    position: relative;
-  }
-
-  .main-content {
-    margin-left: 0;
-    padding-top: 60px;
-  }
+.container {
+  background: transparent;
 }

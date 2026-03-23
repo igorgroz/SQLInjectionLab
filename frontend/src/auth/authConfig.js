@@ -1,21 +1,16 @@
-import { PublicClientApplication } from "@azure/msal-browser";
-
-const msalConfig = {
+export const msalConfig = {
   auth: {
-    clientId: "8f4244a8-0dfb-4486-b28a-e0af636e7c7f",
+    clientId: "a6960366-f171-44e0-9fa1-d0792977a23d", // ✅ SPA app
     authority: "https://login.microsoftonline.com/487f7bd9-65ec-4967-83e5-94f06e11b6d1",
     redirectUri: "http://localhost:3000",
   },
-  cache: {
-    // For lab purposes this is fine; you can switch to sessionStorage later
-    cacheLocation: "localStorage",
-    storeAuthStateInCookie: true,
-  },
 };
 
-export const msalInstance = new PublicClientApplication(msalConfig);
-
-// Minimal OIDC scopes. Add API scopes later when you protect backend endpoints.
 export const loginRequest = {
-  scopes: ["openid", "profile", "email"],
+  scopes: [
+    "openid",
+    "profile",
+    "api://af63b7cb-1958-4029-b50c-3f2c17655120/user.read",
+    "api://af63b7cb-1958-4029-b50c-3f2c17655120/user.write",
+  ],
 };

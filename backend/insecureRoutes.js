@@ -1,53 +1,56 @@
 const express = require("express");
-const pool = require("./db");
 const router = express.Router();
+const pool = require("./db");
 
-// Insecure GET endpoint to retrieve all users
+// Intentionally vulnerable: SQL injection demo
 router.get("/insecure-users", async (req, res) => {
   try {
-    // Vulnerable to SQL Injection
-    const result = await pool.query("SELECT * FROM users;");
-    res.json({ message: "Users retrieved", users: result.rows });
+    const result = await pool.query("SELECT * FROM users ORDER BY userid");
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error fetching insecure users:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Insecure POST method to add a new cloth for a user (vulnerable)
+// Intentionally vulnerable
 router.post("/insecure-users/clothes", async (req, res) => {
-    const { userid, clothid } = req.body;
-  
-    // Insecure code: Directly injecting user inputs into the SQL query
-    const sql = `INSERT INTO user_clothes (userid, clothid) VALUES (${userid}, '${clothid}');`;
-  
-//    console.log(`Executing SQL query: ${sql}`); // Log the vulnerable SQL query
-  
-    try {
-      const result = await pool.query(sql);  // Execute the query with injection risk
-      res.json({ message: "Cloth added successfully!", query: sql, result: result });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-
-// Insecure POST method to remove a cloth from a user's wardrobe (vulnerable)
-router.post("/insecure-users/remove-cloth", async (req, res) => {
-  const { userid, clothid } = req.body;
-
-  // Insecure query, vulnerable to SQL injection
   try {
-    const result = await pool.query(
-      `DELETE FROM user_clothes WHERE userid = ${userid} AND clothid = ${clothid}` // Vulnerable to SQL injection
-    );
+    const { userId, clothId } = req.body;
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: `Cloth ${clothid} not found in user ${userid}'s wardrobe` });
-    }
+    const query = `
+      INSERT INTO user_clothes (user_id, cloth_id)
+      VALUES (${userId}, ${clothId})
+      RETURNING *
+    `;
 
-    res.json({ message: `Cloth ${clothid} removed from user ${userid}'s wardrobe` });
+    const result = await pool.query(query);
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error adding clothing insecurely:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Intentionally vulnerable
+router.post("/insecure-users/remove-cloth", async (req, res) => {
+  try {
+    const { userId, clothId } = req.body;
+
+    const query = `
+      DELETE FROM user_clothes
+      WHERE user_id = ${userId} AND cloth_id = ${clothId}
+      RETURNING *
+    `;
+
+    const result = await pool.query(query);
+    res.json({
+      message: "Cloth removed insecurely",
+      removed: result.rows,
+    });
+  } catch (err) {
+    console.error("Error removing clothing insecurely:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

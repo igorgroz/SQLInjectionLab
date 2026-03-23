@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install production dependencies
-RUN npm install --production
+RUN npm ci --omit=dev
 
 # Copy the remaining project files into the container
 COPY . .
@@ -17,7 +17,8 @@ COPY . .
 EXPOSE 5001
 
 # Add tools for troubleshooting
-RUN apt-get update && apt-get install -y iputils-ping postgresql-client net-tools
+RUN apt-get update && apt-get install -y iputils-ping postgresql-client net-tools \
+  && rm -rf /var/lib/apt/lists/*
 
 # Command to start your backend
 CMD ["node", "/app/index.js"] 

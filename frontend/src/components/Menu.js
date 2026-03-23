@@ -1,61 +1,139 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useMsal, useIsAuthenticated } from "@azure/msal-react";
+import { loginRequest } from "../auth/authConfig";
 
 const Menu = () => {
-  const [openDropdown, setOpenDropdown] = useState(null);
+  const location = useLocation();
+  const { instance, accounts } = useMsal();
+  const isAuthenticated = useIsAuthenticated();
 
-  const toggleDropdown = (menu) => {
-    setOpenDropdown(openDropdown === menu ? null : menu);
+  const account = accounts && accounts.length > 0 ? accounts[0] : null;
+
+  const handleLogin = async () => {
+    try {
+      await instance.loginPopup(loginRequest);
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
   };
 
+  const handleLogout = async () => {
+    try {
+      await instance.logoutPopup({
+        mainWindowRedirectUri: "/",
+      });
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
+
+  const navLinkStyle = (path) => ({
+    display: "block",
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "16px 18px",
+    marginBottom: "14px",
+    borderRadius: "8px",
+    textDecoration: "none",
+    fontWeight: 700,
+    fontSize: "18px",
+    color: "#ffffff",
+    backgroundColor: location.pathname === path ? "#4caf50" : "#2b80df",
+  });
+
   return (
-    <nav className="bg-gray-900 text-white p-4 shadow-lg">
-      <ul className="flex justify-start items-center space-x-2"> {/* Reduced horizontal space */}
-        <li>
-          <Link to="/" className="hover:text-blue-400 transition">Home</Link>
-        </li>
+    <aside
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "320px",
+        height: "100vh",
+        backgroundColor: "#1976e6",
+        color: "#ffffff",
+        padding: "28px 22px",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        overflowY: "auto",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            fontSize: "22px",
+            fontWeight: 800,
+            marginBottom: "28px",
+          }}
+        >
+          Home
+        </div>
 
-        {/* Users Dropdown */}
-        <li className="relative group">
-          <button
-            onClick={() => toggleDropdown("users")}
-            className="hover:text-blue-400 transition flex items-center"
-          >
-            Users ▼
-          </button>
-          {openDropdown === "users" && (
-            <ul className="absolute left-0 mt-1 w-52 bg-white text-black rounded-lg shadow-lg py-1 border border-gray-300"> {/* Reduced padding and margin */}
-              <li className="p-1 hover:bg-gray-100 transition">
-                <Link to="/list-users-rest">List Users (REST)</Link>
-              </li>
-              <li className="p-1 hover:bg-gray-100 transition">
-                <Link to="/list-users-graphql">List Users (GraphQL)</Link>
-              </li>
-            </ul>
-          )}
-        </li>
+        <nav>
+          <Link to="/users-rest" style={navLinkStyle("/users-rest")}>
+            Insecure Users REST
+          </Link>
 
-        {/* Clothes Dropdown */}
-        <li className="relative group">
+          <Link to="/safe-users-rest" style={navLinkStyle("/safe-users-rest")}>
+            Secure Users REST
+          </Link>
+        </nav>
+      </div>
+
+      <div>
+        {isAuthenticated && account ? (
+          <>
+            <div
+              style={{
+                marginBottom: "18px",
+                fontSize: "15px",
+                lineHeight: 1.4,
+                wordBreak: "break-word",
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: "6px" }}>Signed in as:</div>
+              <div>{account.username}</div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                border: "none",
+                borderRadius: "8px",
+                backgroundColor: "#4caf50",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "16px",
+                cursor: "pointer",
+              }}
+            >
+              Logout
+            </button>
+          </>
+        ) : (
           <button
-            onClick={() => toggleDropdown("clothes")}
-            className="hover:text-blue-400 transition flex items-center"
+            onClick={handleLogin}
+            style={{
+              width: "100%",
+              padding: "14px 16px",
+              border: "none",
+              borderRadius: "8px",
+              backgroundColor: "#4caf50",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: "16px",
+              cursor: "pointer",
+            }}
           >
-            Clothes ▼
+            Login
           </button>
-          {openDropdown === "clothes" && (
-            <ul className="absolute left-0 mt-1 w-52 bg-white text-black rounded-lg shadow-lg py-1 border border-gray-300"> {/* Reduced padding and margin */}
-              <li className="p-1 hover:bg-gray-100 transition">
-                <Link to="/fetch-user-clothing-rest">Fetch Clothes (REST)</Link>
-              </li>
-              <li className="p-1 hover:bg-gray-100 transition">
-                <Link to="/fetch-user-clothing-graphql">Fetch Clothes (GraphQL)</Link>
-              </li>
-            </ul>
-          )}
-        </li>
-      </ul>
-    </nav>
+        )}
+      </div>
+    </aside>
   );
 };
 
