@@ -1,60 +1,103 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { useParams } from 'react-router-dom';
+import { getAccessToken } from '../auth/authHeaders';
+import authApolloClient from '../authApolloClient';
 
 const SECURE_GRAPHQL_ENDPOINT = 'http://localhost:5001/graphql-secure';
 
+const GET_SAFE_CLOTHES_BY_USER = gql`
+  query GetSafeClothesByUser($userid: ID!) {
+    getSafeClothesByUser(userid: $userid) {
+      userid
+      name
+      surname
+      clothid
+      description
+      color
+    }
+  }
+`;
+
 const SecureUserDetailsGraphQLPage = () => {
+  const { userid } = useParams();
+  const parsedUserId = String(userid);
+
   const [newClothId, setNewClothId] = useState('');
   const [removeClothId, setRemoveClothId] = useState('');
   const [serverResponse, setServerResponse] = useState(null);
-  const [graphqlEndpoint, setGraphqlEndpoint] = useState('');
+  const [graphqlEndpoint, setGraphqlEndpoint] = useState(SECURE_GRAPHQL_ENDPOINT);
   const [mutationQuery, setMutationQuery] = useState('');
-
-  const { userid } = useParams();
-  const parsedUserId = parseInt(userid, 10);
-
-  const GET_SAFE_CLOTHES_BY_USER = gql`
-    query GetSafeClothesByUser($userid: ID!) {
-      getSafeClothesByUser(userid: $userid) {
-        userid
-        name
-        surname
-        clothid
-        description
-        color
-      }
-    }
-  `;
-
-  const { data, loading, error, refetch } = useQuery(GET_SAFE_CLOTHES_BY_USER, {
-    variables: { userid: String(parsedUserId) },
-    context: {
-      uri: SECURE_GRAPHQL_ENDPOINT,
-    },
+  const [requestDetails, setRequestDetails] = useState({
+    url: SECURE_GRAPHQL_ENDPOINT,
+    method: 'POST',
+    body: JSON.stringify(
+      {
+        query: GET_SAFE_CLOTHES_BY_USER.loc.source.body,
+        variables: { userid: parsedUserId },
+      },
+      null,
+      2
+    ),
+    response: null,
   });
 
-  const handleMutation = (mutation, action) => {
-    setGraphqlEndpoint(SECURE_GRAPHQL_ENDPOINT);
-    setMutationQuery(mutation);
+  const { data, loading, error, refetch } = useQuery(GET_SAFE_CLOTHES_BY_USER, {
+    variables: { userid: parsedUserId },
+    client: authApolloClient,
+  });
 
-    fetch(SECURE_GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: mutation }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log('Server Response:', data);
-        setServerResponse(JSON.stringify(data, null, 2));
-        if (action === 'add') setNewClothId('');
-        if (action === 'remove') setRemoveClothId('');
-        refetch();
-      })
-      .catch((error) => {
-        console.error(`Error during ${action} mutation:`, error);
-        setServerResponse(`Error: ${error.message}`);
+  useEffect(() => {
+    setRequestDetails((prev) => ({
+      ...prev,
+      body: JSON.stringify(
+        {
+          query: GET_SAFE_CLOTHES_BY_USER.loc.source.body,
+          variables: { userid: parsedUserId },
+        },
+        null,
+        2
+      ),
+    }));
+  }, [parsedUserId]);
+
+  useEffect(() => {
+    if (data) {
+      setRequestDetails((prev) => ({
+        ...prev,
+        response: JSON.stringify(data, null, 2),
+      }));
+    }
+  }, [data]);
+
+  const handleMutation = async (mutation, action) => {
+    try {
+      setGraphqlEndpoint(SECURE_GRAPHQL_ENDPOINT);
+      setMutationQuery(mutation);
+
+      const accessToken = await getAccessToken();
+
+      const response = await fetch(SECURE_GRAPHQL_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ query: mutation }),
       });
+
+      const result = await response.json();
+
+      setServerResponse(JSON.stringify(result, null, 2));
+
+      if (action === 'add') setNewClothId('');
+      if (action === 'remove') setRemoveClothId('');
+
+      refetch();
+    } catch (err) {
+      console.error(`Error during ${action} mutation:`, err);
+      setServerResponse(`Error: ${err.message}`);
+    }
   };
 
   const handleAddCloth = () => {
@@ -70,77 +113,94 @@ const SecureUserDetailsGraphQLPage = () => {
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error.message}</p>;
 
+  const rows = data?.getSafeClothesByUser || [];
+
   return (
     <div>
       <hr />
       <h1>User Clothes Information from Authenticated GraphQL API</h1>
 
-      {data?.getSafeClothesByUser?.length > 0 ? (
+      {rows.length > 0 ? (
         <>
           <p>
-            <b>UserID:</b> {data.getSafeClothesByUser[0].userid},{' '}
-            <b>Name:</b> {data.getSafeClothesByUser[0].name},{' '}
-            <b>Surname:</b> {data.getSafeClothesByUser[0].surname}
+            <b>UserID:</b> {rows[0].userid} <b>Name:</b> {rows[0].name} <b>Surname:</b> {rows[0].surname}
           </p>
+
           <ul>
-            {data.getSafeClothesByUser.map((cloth) => (
+            {rows.map((cloth) => (
               <li key={cloth.clothid}>
-                <b>ClothID:</b> {cloth.clothid},{' '}
-                <b>Description:</b> {cloth.description},{' '}
-                <b>Color:</b> {cloth.color}
+                <b>ClothID:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
               </li>
             ))}
           </ul>
         </>
       ) : (
-        <p>No data available.</p>
+        <p>No clothes found for this user.</p>
       )}
 
       <hr />
 
       <details open>
         <summary>Add Cloth Item</summary>
-        <input
-          type="text"
-          value={newClothId}
-          onChange={(e) => setNewClothId(e.target.value)}
-          placeholder="Enter cloth ID"
-        />
-        <button onClick={handleAddCloth}>Add Cloth</button>
+        <div>
+          <input
+            type="text"
+            value={newClothId}
+            onChange={(e) => setNewClothId(e.target.value)}
+            placeholder="Enter cloth ID to add"
+          />
+          <button onClick={handleAddCloth}>Add Cloth (Authenticated GraphQL)</button>
+        </div>
       </details>
 
       <hr />
 
       <details open>
         <summary>Remove Cloth Item</summary>
-        <input
-          type="text"
-          value={removeClothId}
-          onChange={(e) => setRemoveClothId(e.target.value)}
-          placeholder="Enter cloth ID"
-        />
-        <button onClick={handleRemoveCloth}>Remove Cloth</button>
+        <div>
+          <input
+            type="text"
+            value={removeClothId}
+            onChange={(e) => setRemoveClothId(e.target.value)}
+            placeholder="Enter cloth ID to remove"
+          />
+          <button onClick={handleRemoveCloth}>Remove Cloth (Authenticated GraphQL)</button>
+        </div>
       </details>
 
       <details open>
         <summary>Last API Call Details</summary>
-        {serverResponse && (
-          <div
-            style={{
-              marginTop: '20px',
-              padding: '10px',
-              border: '1px solid blue',
-              backgroundColor: '#f0f8ff',
-            }}
-          >
-            <p><strong>GraphQL Endpoint:</strong> {graphqlEndpoint}</p>
-            <p><strong>Method:</strong> POST</p>
-            <p><strong>GraphQL Mutation:</strong></p>
-            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{mutationQuery}</pre>
-            <h3>Server Response:</h3>
-            <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{serverResponse}</pre>
-          </div>
-        )}
+        <div
+          style={{
+            marginTop: '20px',
+            padding: '10px',
+            border: '1px solid blue',
+            backgroundColor: '#f0f8ff',
+          }}
+        >
+          <p><strong>GraphQL Endpoint:</strong> {graphqlEndpoint}</p>
+          <p><strong>Method:</strong> POST</p>
+
+          <p><strong>Initial Query:</strong></p>
+          <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{requestDetails.body}</pre>
+
+          {mutationQuery && (
+            <>
+              <p><strong>Last Mutation:</strong></p>
+              <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{mutationQuery}</pre>
+            </>
+          )}
+
+          <p><strong>Query Response:</strong></p>
+          <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{requestDetails.response}</pre>
+
+          {serverResponse && (
+            <>
+              <h3>Mutation Response:</h3>
+              <pre style={{ backgroundColor: '#eee', padding: '10px' }}>{serverResponse}</pre>
+            </>
+          )}
+        </div>
       </details>
     </div>
   );

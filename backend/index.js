@@ -3,6 +3,7 @@ const cors = require("cors");
 
 const insecureRoutes = require("./insecureRoutes");
 const secureRoutes = require("./secureRoutes");
+const { requireJwt } = require("./authJwt");
 
 const { insecureGraphQLMiddleware } = require("./insecureGraphQL");
 const { secureGraphQLMiddleware } = require("./secureGraphQL");
@@ -19,7 +20,7 @@ app.use("/api", secureRoutes);
 
 // GraphQL routes
 app.use("/graphql-insecure", insecureGraphQLMiddleware);
-app.use("/graphql-secure", secureGraphQLMiddleware);
+app.use("/graphql-secure", requireJwt, secureGraphQLMiddleware);
 
 app.get("/", (req, res) => {
   res.send("SQLInjectionLab backend is running");

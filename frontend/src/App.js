@@ -53,23 +53,7 @@ const App = () => {
         ) : null}
 
         <div className="main-content">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <h1>API Security Testing</h1>
-
-            {isAuthenticated ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span>Signed in as: {accounts[0]?.username}</span>
-                <button onClick={logout}>Logout</button>
-              </div>
-            ) : null}
-          </div>
+          <h1>API Security Testing</h1>
 
           {isAuthenticated ? (
             <Routes>

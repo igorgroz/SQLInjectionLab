@@ -33,7 +33,7 @@ const schema = buildSchema(`
   
     type Mutation {
       addInsecureCloth(userid: ID!, clothid: ID!): String
-      removeInsecureCloth(userid: ID!, clothid: ID!): String
+      removeInsecureCloth(userid: ID!, clothid: String!): String
     }
   `);
 

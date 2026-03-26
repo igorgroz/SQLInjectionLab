@@ -7,36 +7,51 @@ const Menu = ({ logout, username }) => {
   const isActive = (path) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
 
+  const getLinkClass = (path, type) => {
+    const active = isActive(path);
+
+    if (!active) return "menu-link";
+
+    return type === "anonymous"
+      ? "menu-link menu-link-anonymous-active"
+      : "menu-link menu-link-authenticated-active";
+  };
+
   return (
     <aside className="sidebar">
       <div>
-        <div className="menu-title">Home</div>
+        <Link to="/" className="menu-link" style={{ marginBottom: "24px" }}>
+          Home
+        </Link>
+        <hr className="menu-divider" />
 
         <nav>
           <Link
             to="/users-rest"
-            className={`menu-link ${isActive("/users-rest") ? "active" : ""}`}
+            className={getLinkClass("/users-rest", "anonymous")}
           >
             Anonymous REST
           </Link>
 
           <Link
+            to="/users-graphql"
+            className={getLinkClass("/users-graphql", "anonymous")}
+          >
+            Anonymous GraphQL
+          </Link>
+
+          <hr className="menu-divider" />
+
+          <Link
             to="/safe-users-rest"
-            className={`menu-link ${isActive("/safe-users-rest") ? "active" : ""}`}
+            className={getLinkClass("/safe-users-rest", "authenticated")}
           >
             Authenticated REST
           </Link>
 
           <Link
-            to="/users-graphql"
-            className={`menu-link ${isActive("/users-graphql") ? "active" : ""}`}
-          >
-            Anonymous GraphQL
-          </Link>
-
-          <Link
             to="/safe-users-graphql"
-            className={`menu-link ${isActive("/safe-users-graphql") ? "active" : ""}`}
+            className={getLinkClass("/safe-users-graphql", "authenticated")}
           >
             Authenticated GraphQL
           </Link>
@@ -52,6 +67,7 @@ const Menu = ({ logout, username }) => {
         <button className="menu-button" onClick={logout}>
           Logout
         </button>
+        <hr className="menu-divider" />
       </div>
     </aside>
   );

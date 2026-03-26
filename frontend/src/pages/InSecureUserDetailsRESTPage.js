@@ -27,7 +27,7 @@ const InSecureUserDetailsRESTPage = () => {
 
       setError('');
     } catch (err) {
-      console.error('Error fetching insecure REST data:', err);
+      console.error('Error fetching anonymous REST data:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setUserDetails({});
       setClothes([]);
@@ -40,7 +40,6 @@ const InSecureUserDetailsRESTPage = () => {
     }
   }, [userid]);
 
-  // INTENTIONALLY sends raw string input to backend for SQLi lab behavior
   const handleUpdateCloth = async () => {
     const payload = { userid, clothid: newClothId };
 
@@ -58,7 +57,7 @@ const InSecureUserDetailsRESTPage = () => {
       fetchData();
       setError('');
     } catch (err) {
-      console.error('Error updating cloth insecurely:', err);
+      console.error('Error updating cloth anonymously:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setRequestDetails({
         method: 'POST',
@@ -69,7 +68,6 @@ const InSecureUserDetailsRESTPage = () => {
     }
   };
 
-  // INTENTIONALLY sends raw string input to backend for SQLi lab behavior
   const handleRemoveCloth = async () => {
     const payload = { userid, clothid: removeClothId };
 
@@ -87,7 +85,7 @@ const InSecureUserDetailsRESTPage = () => {
       fetchData();
       setError('');
     } catch (err) {
-      console.error('Error removing cloth insecurely:', err);
+      console.error('Error removing cloth anonymously:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setRequestDetails({
         method: 'POST',
@@ -101,7 +99,7 @@ const InSecureUserDetailsRESTPage = () => {
   return (
     <div>
       <hr />
-      <h1>User Clothes Information from Insecure REST API</h1>
+      <h1>Anonymous REST API – User Clothes</h1>
 
       {error && (
         <div style={{ color: 'red', marginBottom: '15px' }}>
@@ -116,45 +114,81 @@ const InSecureUserDetailsRESTPage = () => {
       <ul>
         {(clothes || []).map((cloth) => (
           <li key={cloth.clothid}>
-            <b>clothid:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
+            <b>ClothID:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
           </li>
         ))}
       </ul>
 
       <hr />
 
-      <div className="flex-container">
-        <details open>
-          <summary>Add Cloth Item</summary>
-          <div>
-            <input
-              type="text"
-              value={newClothId}
-              onChange={(e) => setNewClothId(e.target.value)}
-              placeholder="Enter clothID to add"
-            />
-            <button onClick={handleUpdateCloth}>Add Cloth (Insecure REST)</button>
-          </div>
-        </details>
+      <details open>
+        <summary>Add Cloth Item (Vulnerable REST)</summary>
+        <div>
+          <input
+            type="text"
+            value={newClothId}
+            onChange={(e) => setNewClothId(e.target.value)}
+            placeholder="Enter cloth ID to add"
+          />
+          <button
+            onClick={handleUpdateCloth}
+            style={{
+              backgroundColor: 'red',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Add Cloth
+          </button>
+        </div>
+      </details>
 
-        <details open>
-          <summary>Remove Cloth Item</summary>
-          <div>
-            <input
-              type="text"
-              value={removeClothId}
-              onChange={(e) => setRemoveClothId(e.target.value)}
-              placeholder="Enter clothID to remove"
-            />
-            <button onClick={handleRemoveCloth}>Remove Cloth (Insecure REST)</button>
-          </div>
-        </details>
-      </div>
+      <hr />
+
+      <details open>
+        <summary>Remove Cloth Item (Vulnerable REST)</summary>
+        <div>
+          <input
+            type="text"
+            value={removeClothId}
+            onChange={(e) => setRemoveClothId(e.target.value)}
+            placeholder="Enter cloth ID to remove"
+          />
+          <button
+            onClick={handleRemoveCloth}
+            style={{
+              backgroundColor: 'red',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Remove Cloth
+          </button>
+        </div>
+      </details>
+      <hr></hr>
+
+      <p style={{ color: "#a94442", fontWeight: "600", marginTop: "8px" }}>
+        This page intentionally demonstrates unsafe input handling for testing.
+      </p>
 
       <details open>
         <summary>Last API Call Details</summary>
         {requestDetails && (
-          <div style={{ marginTop: '20px', padding: '10px', border: '1px solid blue', backgroundColor: '#f0f8ff' }}>
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '10px',
+              border: '1px solid blue',
+              backgroundColor: '#f0f8ff',
+            }}
+          >
             <p><strong>REST API Endpoint:</strong> {requestDetails.url}</p>
             <p><strong>Method:</strong> {requestDetails.method}</p>
             <p><strong>Request Body:</strong></p>
