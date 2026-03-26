@@ -190,6 +190,8 @@ const handleRemoveCloth = () => {
         This page intentionally demonstrates unsafe input handling for testing.
       </p>
 
+      <hr></hr>      
+
       <details open>
         <summary>Last API Call Details</summary>
         <div

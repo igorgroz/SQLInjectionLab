@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { useParams } from 'react-router-dom';
-import { getAccessToken } from '../auth/authHeaders';
+import { getAccessToken, getAccount } from '../auth/authHeaders';
 import authApolloClient from '../authApolloClient';
 
 const SECURE_GRAPHQL_ENDPOINT = 'http://localhost:5001/graphql-secure';
@@ -118,7 +118,11 @@ const SecureUserDetailsGraphQLPage = () => {
   return (
     <div>
       <hr />
-      <h1>User Clothes Information from Authenticated GraphQL API</h1>
+      <h1>Authenticated GraphQL – User Clothes</h1>
+
+      <p>
+        <strong>Signed in user:</strong> {getAccount()?.username || "Not signed in"}
+      </p>
 
       {rows.length > 0 ? (
         <>
@@ -141,7 +145,7 @@ const SecureUserDetailsGraphQLPage = () => {
       <hr />
 
       <details open>
-        <summary>Add Cloth Item</summary>
+        <summary>Add Cloth Item (Authenticated / Secure GraphQL)</summary>
         <div>
           <input
             type="text"
@@ -149,14 +153,26 @@ const SecureUserDetailsGraphQLPage = () => {
             onChange={(e) => setNewClothId(e.target.value)}
             placeholder="Enter cloth ID to add"
           />
-          <button onClick={handleAddCloth}>Add Cloth (Authenticated GraphQL)</button>
+          <button
+            onClick={handleAddCloth}
+            style={{
+              backgroundColor: '#4caf50',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Add Cloth
+          </button>
         </div>
       </details>
 
       <hr />
 
       <details open>
-        <summary>Remove Cloth Item</summary>
+        <summary>Remove Cloth Item (Authenticated / Secure GraphQL)</summary>
         <div>
           <input
             type="text"
@@ -164,9 +180,27 @@ const SecureUserDetailsGraphQLPage = () => {
             onChange={(e) => setRemoveClothId(e.target.value)}
             placeholder="Enter cloth ID to remove"
           />
-          <button onClick={handleRemoveCloth}>Remove Cloth (Authenticated GraphQL)</button>
+          <button
+            onClick={handleRemoveCloth}
+            style={{
+              backgroundColor: '#4caf50',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Remove Cloth
+          </button>
         </div>
       </details>
+      
+      <hr></hr>
+      <p style={{ color: "#2e7d32", fontWeight: "600", marginTop: "10px" }}>
+        This page demonstrates authenticated access and safer input handling.
+      </p>
+      <hr></hr>
 
       <details open>
         <summary>Last API Call Details</summary>

@@ -19,7 +19,6 @@ const SecureUserDetailsRESTPage = () => {
   const REST_API_USER_DETAILS = `${config.REST_API_BASE_URL}/${parsedUserId}`;
   const REST_API_REMOVE_CLOTH = config.REMOVE_CLOTH_URL;
   const REST_API_UPDATE_CLOTH = `${config.REST_API_BASE_URL}/clothes`;
-  const REST_API_UPDATE_CLOTH_INS = `${config.REST_API_BASE_URL_INS}/clothes`;
 
   const fetchData = async () => {
     try {
@@ -34,7 +33,7 @@ const SecureUserDetailsRESTPage = () => {
 
       setError('');
     } catch (err) {
-      console.error('Error fetching secure REST data:', err);
+      console.error('Error fetching authenticated REST data:', err);
       setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
       setUserDetails({});
       setClothes([]);
@@ -47,7 +46,6 @@ const SecureUserDetailsRESTPage = () => {
     }
   }, [userid]);
 
-  // Secure button: goes to secure endpoint with auth headers
   const handleUpdateCloth = async () => {
     const payload = { userid: parsedUserId, clothid: newClothId };
 
@@ -71,35 +69,6 @@ const SecureUserDetailsRESTPage = () => {
       setRequestDetails({
         method: 'POST',
         url: REST_API_UPDATE_CLOTH,
-        body: JSON.stringify(payload, null, 2),
-        serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
-      });
-    }
-  };
-
-  // Red button: intentionally sends raw input to insecure endpoint
-  const handleUpdateClothIns = async () => {
-    const payload = { userid: parsedUserId, clothid: newClothId };
-
-    try {
-      const response = await axios.post(REST_API_UPDATE_CLOTH_INS, payload);
-
-      setRequestDetails({
-        method: 'POST',
-        url: REST_API_UPDATE_CLOTH_INS,
-        body: JSON.stringify(payload, null, 2),
-        serverResponse: JSON.stringify(response.data, null, 2),
-      });
-
-      setNewClothId('');
-      fetchData();
-      setError('');
-    } catch (err) {
-      console.error('Error updating cloth insecurely:', err);
-      setError(err.response?.data ? JSON.stringify(err.response.data) : err.message);
-      setRequestDetails({
-        method: 'POST',
-        url: REST_API_UPDATE_CLOTH_INS,
         body: JSON.stringify(payload, null, 2),
         serverResponse: `Error: ${err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message}`,
       });
@@ -138,7 +107,7 @@ const SecureUserDetailsRESTPage = () => {
   return (
     <div>
       <hr />
-      <h1>User Clothes Information from Secure REST API</h1>
+      <h1>Authenticated REST – User Clothes</h1>
 
       <p>
         <strong>Signed in user:</strong> {getAccount()?.username || 'Not signed in'}
@@ -157,53 +126,69 @@ const SecureUserDetailsRESTPage = () => {
       <ul>
         {(clothes || []).map((cloth) => (
           <li key={cloth.clothid}>
-            <b>clothid:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
+            <b>ClothID:</b> {cloth.clothid} <b>Description:</b> {cloth.description} <b>Color:</b> {cloth.color}
           </li>
         ))}
       </ul>
 
       <hr />
 
-      <div className="flex-container">
-        <details open>
-          <summary>Add Cloth Item</summary>
-          <div>
-            <input
-              type="text"
-              value={newClothId}
-              onChange={(e) => setNewClothId(e.target.value)}
-              placeholder="Enter clothID to add"
-            />
-            <button onClick={handleUpdateCloth}>Add Cloth (Secure REST)</button>
-            <button
-              onClick={handleUpdateClothIns}
-              style={{
-                backgroundColor: 'red',
-                color: 'white',
-                padding: '10px',
-                border: 'none',
-                borderRadius: '5px',
-                marginLeft: '10px',
-              }}
-            >
-              Add Cloth (Vulnerable REST)
-            </button>
-          </div>
-        </details>
+      <details open>
+        <summary>Add Cloth Item (Authenticated / Secure REST)</summary>
+        <div>
+          <input
+            type="text"
+            value={newClothId}
+            onChange={(e) => setNewClothId(e.target.value)}
+            placeholder="Enter cloth ID to add"
+          />
+          <button
+            onClick={handleUpdateCloth}
+            style={{
+              backgroundColor: '#4caf50',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Add Cloth
+          </button>
+        </div>
+      </details>
 
-        <details open>
-          <summary>Remove Cloth Item</summary>
-          <div>
-            <input
-              type="text"
-              value={removeClothId}
-              onChange={(e) => setRemoveClothId(e.target.value)}
-              placeholder="Enter clothID to remove"
-            />
-            <button onClick={handleRemoveCloth}>Remove Cloth (Secure REST)</button>
-          </div>
-        </details>
-      </div>
+      <hr />
+
+      <details open>
+        <summary>Remove Cloth Item (Authenticated / Secure REST)</summary>
+        <div>
+          <input
+            type="text"
+            value={removeClothId}
+            onChange={(e) => setRemoveClothId(e.target.value)}
+            placeholder="Enter cloth ID to remove"
+          />
+          <button
+            onClick={handleRemoveCloth}
+            style={{
+              backgroundColor: '#4caf50',
+              color: 'white',
+              padding: '10px',
+              border: 'none',
+              borderRadius: '5px',
+              marginLeft: '10px',
+            }}
+          >
+            Remove Cloth
+          </button>
+        </div>
+      </details>
+      <hr></hr>
+      <p style={{ color: '#2e7d32', fontWeight: '600', marginTop: '10px' }}>
+        This page demonstrates authenticated access and safer input handling.
+      </p>
+      <hr></hr>
 
       <details open>
         <summary>Last API Call Details</summary>

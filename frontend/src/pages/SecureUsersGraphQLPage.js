@@ -43,7 +43,7 @@ const SecureUsersGraphQLPage = () => {
       <h1>Users from Authenticated GraphQL API</h1>
 
       <p style={{ marginBottom: "16px", color: "#444" }}>
-        Authentication required (Microsoft Entra ID). Click a user to view details.
+        Authentication required. Click a user to view details.
       </p>
 
       <p>

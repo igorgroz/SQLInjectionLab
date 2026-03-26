@@ -172,11 +172,14 @@ const InSecureUserDetailsRESTPage = () => {
           </button>
         </div>
       </details>
+      
       <hr></hr>
 
       <p style={{ color: "#a94442", fontWeight: "600", marginTop: "8px" }}>
         This page intentionally demonstrates unsafe input handling for testing.
       </p>
+
+      <hr></hr>
 
       <details open>
         <summary>Last API Call Details</summary>

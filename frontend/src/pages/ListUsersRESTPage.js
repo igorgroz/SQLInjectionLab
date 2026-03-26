@@ -47,7 +47,7 @@ const ListUsersRESTPage = () => {
       <h1>Users from Authenticated REST API</h1>
 
       <p style={{ marginBottom: "16px", color: "#444" }}>
-        Authentication required (Microsoft Entra ID). Click a user to view details.
+        Authentication required. Click a user to view details.
       </p>
 
       <p>
@@ -80,7 +80,14 @@ const ListUsersRESTPage = () => {
       <details open>
         <summary>REST API Call Details</summary>
         {requestDetails && (
-          <div style={{ marginTop: '20px', padding: '10px', border: '1px solid blue', backgroundColor: '#f0f8ff' }}>
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '10px',
+              border: '1px solid blue',
+              backgroundColor: '#f0f8ff',
+            }}
+          >
             <p><strong>REST API Endpoint:</strong> {requestDetails.url}</p>
             <p><strong>Method:</strong> {requestDetails.method}</p>
             <h3>Server Response:</h3>
