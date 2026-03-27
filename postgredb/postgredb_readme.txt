@@ -11,6 +11,13 @@ sqlinjproject=# \du
  sql_lab_user  |  
 
 To create dump
+>pg_dump -U namesurname -h localhost --no-owner --no-privileges -d sqlinjproject > dump.sql
 
+To restore in the db container:
+docker exec -i sqlinj-db psql -U sql_lab_user -d sqlinjproject < dump.sql
 
-pg_dump -U namesurname -h localhost --no-owner --no-privileges -d sqlinjproject > dump.sql
+To verify dump:
+docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject
+
+To connect to postgresql inside a container:
+psql -U sql_lab_user -d sqlinjproject  
