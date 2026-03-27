@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    container_name: sqlinj-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sqlinjproject
+      POSTGRES_USER: sql_lab_user
+      POSTGRES_PASSWORD: StrongPassword123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    container_name: sqlinj-backend
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - "5001:5001"
+    depends_on:
+      - db
+
+  frontend:
+    container_name: sqlinj-frontend
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
