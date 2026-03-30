@@ -36,6 +36,10 @@ app.get("/", (req, res) => {
   res.send("SQLInjectionLab backend is running");
 });
 
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
