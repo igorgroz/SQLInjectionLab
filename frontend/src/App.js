@@ -21,6 +21,7 @@ const Home = () => (
   <div className="container">
     <h2>Home</h2>
     <p>Choose one of the links to test API functions.</p>
+    <p style={{ fontSize: "0.8em", color: "#888" }}>v0.2.0</p>
   </div>
 );
 
