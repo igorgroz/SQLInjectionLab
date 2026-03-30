@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5001;
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin === "http://localhost:3000" || origin.endsWith(".app.github.dev")) {
+    if (!origin || origin === "http://localhost:3000" || origin === "http://sqlinj.local" || origin.endsWith(".app.github.dev")) {
       callback(null, true);
     } else {
       callback(new Error("CORS not allowed: " + origin));
