@@ -22,7 +22,7 @@
 
 ```
 Phase 0  ✅  Containerised app, local + Codespaces
-Phase 1      Local Kubernetes (minikube)
+Phase 1      Git Workflow + Local Kubernetes (minikube)
 Phase 2      Pipeline with Security Gates (GitHub Actions)
 Phase 3      EKS on AWS with Terraform + Helm
 Phase 4      API Security Layer (WAF + API Gateway)
@@ -33,7 +33,141 @@ Each phase builds directly on the previous one using the same app — you are no
 
 ---
 
-## Phase 1 — Local Kubernetes with minikube
+## Phase 1 — Git Workflow + Local Kubernetes with minikube
+
+### Part A — Git Branching Strategy and Parallel Development
+
+#### What You Will Learn
+Professional Git workflow is foundational to everything that follows — pipelines trigger on branches, security gates run on PRs, releases are tagged commits. Getting this right now means Phase 2 (CI/CD) slots in naturally on top of an already clean branching model.
+
+#### Choosing a Branching Strategy
+
+There are three common strategies. For a solo lab that will grow into a pipeline, **GitHub Flow** is the right choice — it is simple, maps cleanly to CI/CD, and scales well when you add automated gates.
+
+**GitFlow** — two permanent branches (`main` and `develop`), plus `feature/`, `release/`, and `hotfix/` branches. Designed for scheduled release cycles. Adds overhead that is unnecessary until you have multiple teams or formal release cadences. Not recommended here.
+
+**Trunk-based development** — everyone commits directly to `main`, with short-lived feature branches (hours, not days). Requires strong automated test coverage to work safely. Good end goal but premature at this stage.
+
+**GitHub Flow** — this is what you will use. One permanent branch (`main`), short-lived `feature/` branches for all work, every change goes through a Pull Request before merging to `main`. Simple, auditable, and the natural fit for GitHub Actions pipelines.
+
+```
+main  ──────────────────────────────────────────► (always deployable)
+         │                    ▲
+         └─ feature/xxx ──────┘  (PR → review → merge)
+```
+
+#### Branch Naming Convention
+
+Use a consistent prefix pattern — this becomes important when pipeline triggers use branch filters:
+
+```
+feature/   — new functionality        e.g. feature/add-user-profile
+fix/       — bug fixes                e.g. fix/cors-header-missing
+chore/     — non-functional changes   e.g. chore/update-dependencies
+docs/      — documentation only       e.g. docs/update-architecture
+k8s/       — infrastructure/K8s work  e.g. k8s/add-backend-deployment
+```
+
+#### Releases and Tagging
+
+In GitHub Flow, a release is a **tag on main** — not a separate branch. After merging features and verifying the app works, you tag the commit:
+
+```bash
+git tag -a v1.0.0 -m "Phase 1 complete: K8s local deployment"
+git push origin v1.0.0
+```
+
+Semantic versioning (`MAJOR.MINOR.PATCH`): increment MAJOR for breaking changes, MINOR for new features, PATCH for fixes. For a lab you can use `v0.x.x` until you consider it production-ready.
+
+GitHub automatically creates a Release page from a tag — you can add release notes documenting what changed. This becomes the artefact your pipeline later promotes through environments.
+
+#### Pull Requests as a Security Control
+
+A PR is not just a code review mechanism — in a DevSecOps context it is a security gate. When you add the pipeline in Phase 2, every PR will automatically run SAST, SCA, and container scanning before a merge is allowed. You are establishing the habit now so the tooling slots in without changing your workflow.
+
+Good PR hygiene:
+- Keep PRs small and focused — one feature, one fix
+- Write a meaningful PR description explaining *why*, not just *what*
+- Link to any relevant issue or learning objective
+- Review your own diff before merging (`git diff main...feature/your-branch`)
+
+#### Practical Exercise — Parallel Development Across Two Environments
+
+This exercise simulates real-world parallel development: two developers (you, on two different machines) working on separate features simultaneously, then merging both into a release.
+
+**Setup — configure your identity on both environments if not already done:**
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+```
+
+**Feature 1 — on your local Mac:**
+
+Pick a small, self-contained change. Good candidates for your lab:
+- Add a `/health` endpoint to the backend (returns `{ status: "ok", timestamp: "..." }`) — useful for K8s liveness probes later
+- Add a version number to the frontend home page
+- Add a `CONTRIBUTING.md` documenting how to run the project locally
+
+```bash
+# On Mac, from your project directory
+git checkout main
+git pull origin main
+git checkout -b feature/health-endpoint
+
+# Make your change, then:
+git add <files>
+git commit -m "feat: add /health endpoint for K8s liveness probe"
+git push origin feature/health-endpoint
+```
+
+Then open a Pull Request on GitHub: `feature/health-endpoint → main`.
+
+**Feature 2 — in Codespaces:**
+
+Pick a different small change:
+```bash
+# In Codespaces terminal
+git checkout main
+git pull origin main
+git checkout -b feature/version-display
+
+# Make your change, then:
+git add <files>
+git commit -m "feat: display app version on home page"
+git push origin feature/version-display
+```
+
+Open a second Pull Request on GitHub: `feature/version-display → main`.
+
+**Merge both PRs** (merge Feature 1 first, then Feature 2):
+
+When merging Feature 2, Git may detect a conflict if both changes touched the same file. This is intentional — resolving merge conflicts is a core skill:
+
+```bash
+# If there's a conflict after merging Feature 1 into main:
+git checkout feature/version-display
+git pull origin main          # bring in the merged Feature 1
+# resolve any conflicts in your editor
+git add <resolved files>
+git commit -m "chore: resolve merge conflict with feature/health-endpoint"
+git push origin feature/version-display
+# now the PR is clean to merge
+```
+
+**Tag the release:**
+```bash
+git checkout main
+git pull origin main
+git tag -a v0.2.0 -m "Phase 1a complete: parallel feature development and merge workflow"
+git push origin v0.2.0
+```
+
+#### What This Teaches
+By doing this exercise you will have experienced: branch isolation (changes on one branch don't affect the other), the PR review surface (you see the diff before it hits main), conflict resolution (the reality of parallel development), and release tagging (a named point in history you can always return to). Every subsequent phase assumes this workflow — pipelines trigger on PR, deploy on tag.
+
+---
+
+### Part B — Local Kubernetes with minikube
 
 ### What You Will Learn
 Kubernetes is the de-facto container orchestration platform for microservices. Before you deploy to EKS (managed K8s on AWS), you need to be fluent with K8s primitives locally where iteration is fast and free. Everything you configure here maps directly to EKS — the API is identical.
@@ -286,7 +420,8 @@ At each phase, your lab gives you concrete artefacts to validate learning:
 
 | Phase | What you build | What you validate |
 |---|---|---|
-| 1 | K8s manifests for your 3 services | App runs in minikube, Secrets not in env vars |
+| 1a | Feature branches, PRs, release tag | Two features merged from Mac + Codespaces, v0.2.0 tagged |
+| 1b | K8s manifests for your 3 services | App runs in minikube, Secrets not in env vars |
 | 2 | GitHub Actions pipeline | SAST flags insecureRoutes.js, DAST finds SQLi on insecure endpoint only |
 | 3 | Terraform EKS + Helm deploy | App runs in EKS, IRSA working, no hardcoded creds |
 | 4 | WAF on ALB | SQLi payload blocked at edge, JWT validated at gateway |
