@@ -3,9 +3,14 @@ kind: Ingress
 metadata:
   name: sqlinj-ingress
   namespace: sqlinj
-  annotations: {}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - sqlinj.local
+      secretName: sqlinj-tls
   rules:
     - host: sqlinj.local
       http:
@@ -16,7 +21,7 @@ spec:
               service:
                 name: frontend
                 port:
-                  number: 3000
+                  number: 80
           - path: /api
             pathType: Prefix
             backend:

@@ -3,7 +3,7 @@ const getApiBase = () => {
     return 'http://localhost:5001';
   }
   if (window.location.hostname === 'sqlinj.local') {
-    return 'http://sqlinj.local';
+    return 'https://sqlinj.local';
   }
   return `https://${window.location.hostname.replace('-3000.', '-5001.')}`;
 };
