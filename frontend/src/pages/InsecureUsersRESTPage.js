@@ -1,3 +1,4 @@
+import config from '../config';
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
@@ -7,7 +8,7 @@ const InsecureUsersRESTPage = () => {
   const [requestDetails, setRequestDetails] = useState(null);
   const [error, setError] = useState("");
 
-  const REST_API_URL = "http://localhost:5001/api/insecure-users";
+  const REST_API_URL = config.REST_API_BASE_URL_INS;
 
   useEffect(() => {
     const fetchUsers = async () => {

@@ -1,10 +1,11 @@
+import config from '../config';
 import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { useParams } from 'react-router-dom';
 import { getAccessToken, getAccount } from '../auth/authHeaders';
 import authApolloClient from '../authApolloClient';
 
-const SECURE_GRAPHQL_ENDPOINT = 'http://localhost:5001/graphql-secure';
+const SECURE_GRAPHQL_ENDPOINT = config.GRAPHQL_ENDPOINT;
 
 const GET_SAFE_CLOTHES_BY_USER = gql`
   query GetSafeClothesByUser($userid: ID!) {

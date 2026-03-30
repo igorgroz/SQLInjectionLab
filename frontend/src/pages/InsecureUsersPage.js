@@ -1,8 +1,9 @@
+import config from '../config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { gql, useQuery } from '@apollo/client';
 
-const REST_API_URL = 'http://localhost:5001/api/insecure-users'; // Insecure REST API URL
+const REST_API_URL = config.REST_API_BASE_URL_INS; // Insecure REST API URL
 
 // GraphQL Query for insecure users
 const GET_INSECURE_USERS = gql`

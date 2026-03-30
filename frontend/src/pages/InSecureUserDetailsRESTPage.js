@@ -1,3 +1,4 @@
+import config from '../config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
@@ -12,10 +13,10 @@ const InSecureUserDetailsRESTPage = () => {
 
   const { userid } = useParams();
 
-  const REST_API_USER_DETAILS = `http://localhost:5001/api/insecure-users/${userid}`;
-  const REST_API_URL_CLOTHES = `http://localhost:5001/api/insecure-users/${userid}/clothes`;
-  const REST_API_UPDATE_CLOTH = `http://localhost:5001/api/insecure-users/clothes`;
-  const REST_API_REMOVE_CLOTH = `http://localhost:5001/api/insecure-users/remove-cloth`;
+  const REST_API_USER_DETAILS = `${config.REST_API_BASE_URL_INS}/${userid}`;
+  const REST_API_URL_CLOTHES = `${config.REST_API_BASE_URL_INS}/${userid}/clothes`;
+  const REST_API_UPDATE_CLOTH = `${config.REST_API_BASE_URL_INS}/clothes`;
+  const REST_API_REMOVE_CLOTH = `${config.REST_API_BASE_URL_INS}/remove-cloth`;
 
   const fetchData = async () => {
     try {

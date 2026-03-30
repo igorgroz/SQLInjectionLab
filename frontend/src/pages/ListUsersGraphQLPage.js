@@ -1,3 +1,4 @@
+import config from '../config';
 import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { Link } from 'react-router-dom';
@@ -16,7 +17,7 @@ const ListUsersGraphQLPage = () => {
   const { data, loading, error } = useQuery(GET_INSECURE_USERS);
 
   const [requestDetails, setRequestDetails] = useState({
-    url: 'http://localhost:5001/graphql-insecure',
+    url: config.GRAPHQL_ENDPOINT_INS,
     method: 'POST',
     body: JSON.stringify({ query: GET_INSECURE_USERS.loc.source.body }, null, 2),
     response: null,

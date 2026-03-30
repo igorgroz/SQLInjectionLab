@@ -3,13 +3,19 @@
   "forwardPorts": [3000, 5001, 5432],
   "portsAttributes": {
     "3000": {
-      "label": "frontend"
+      "label": "React Frontend",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
     },
     "5001": {
-      "label": "backend"
+      "label": "Node Backend",
+      "onAutoForward": "notify",
+      "visibility": "public"
     },
     "5432": {
-      "label": "postgres"
+      "label": "PostgreSQL",
+      "onAutoForward": "silent",
+      "visibility": "private"
     }
   }
 }

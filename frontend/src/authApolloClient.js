@@ -1,14 +1,14 @@
 import { ApolloClient, InMemoryCache, HttpLink, ApolloLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { getAccessToken } from './auth/authHeaders';
+import config from './config';
 
 const httpLink = new HttpLink({
-  uri: 'http://localhost:5001/graphql-secure',
+  uri: config.GRAPHQL_ENDPOINT,
 });
 
 const authLink = setContext(async (_, { headers }) => {
   const accessToken = await getAccessToken();
-
   return {
     headers: {
       ...headers,

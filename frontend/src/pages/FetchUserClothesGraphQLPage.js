@@ -1,8 +1,9 @@
+import config from '../config';
 import React, { useState, useEffect } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import { useParams } from 'react-router-dom';
 
-const ANONYMOUS_GRAPHQL_ENDPOINT = 'http://localhost:5001/graphql-insecure';
+const ANONYMOUS_GRAPHQL_ENDPOINT = config.GRAPHQL_ENDPOINT_INS;
 
 const GET_INSECURE_CLOTHES_BY_USER = gql`
   query GetInsecureClothesByUser($userid: ID!) {

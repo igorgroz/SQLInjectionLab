@@ -10,3 +10,7 @@ To manualy restore db from dump, ensure the containers are up and running then r
 
 To go into a shell of a container for example sqlinj-db container run following:
 docker exec -it sqlinj-db sh 
+
+In codespace:
+cp backend/.env.example backend/.env
+
