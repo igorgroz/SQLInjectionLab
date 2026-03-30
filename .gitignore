@@ -13,3 +13,4 @@ __pycache__/
 
 infra/OpenVPN/*.dmg
 *.dmgbackend/.env
+SQLInjproject.zip
