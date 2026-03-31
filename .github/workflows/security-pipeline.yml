@@ -25,7 +25,7 @@ env:
   REGISTRY: ghcr.io
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/sqlinj-frontend
   BACKEND_IMAGE:  ghcr.io/${{ github.repository_owner }}/sqlinj-backend
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
 
 jobs:
 
@@ -45,22 +45,31 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Semgrep
+        # semgrep scan (not semgrep ci) — ci subcommand requires semgrep.dev
+        # connectivity and has a different flag set. scan is self-contained.
+        # --error: exit 1 if any finding at ERROR severity is detected.
+        # SARIF is written before exit so the upload step always has a file.
         run: |
-          semgrep ci \
+          semgrep scan \
             --config p/javascript \
             --config p/react \
             --config p/nodejs \
             --config p/owasp-top-ten \
             --config p/sql-injection \
-            --sarif --output semgrep.sarif \
-            --error          # exit 1 on findings at ERROR severity
+            --sarif \
+            --output semgrep.sarif \
+            --error \
+            .
         env:
           # Optional: set SEMGREP_APP_TOKEN to push results to semgrep.dev
           # SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-          SEMGREP_RULES: ""   # suppressed — rules passed via --config above
+
+      - name: Ensure SARIF exists (semgrep writes it before exit; guard for edge cases)
+        if: always()
+        run: test -f semgrep.sarif || echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
 
       - name: Upload SARIF → GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()   # upload even on failure so devs can see findings
         with:
           sarif_file: semgrep.sarif
@@ -278,7 +287,7 @@ jobs:
           trivyignores:   .trivyignore
 
       - name: Upload frontend SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-frontend.sarif
@@ -296,7 +305,7 @@ jobs:
           trivyignores:   .trivyignore
 
       - name: Upload backend SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-backend.sarif
