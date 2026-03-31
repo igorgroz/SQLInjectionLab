@@ -8,6 +8,7 @@ const { requireJwt } = require("./authJwt");
 
 const { insecureGraphQLMiddleware } = require("./insecureGraphQL");
 const { secureGraphQLMiddleware } = require("./secureGraphQL");
+const { createApolloMiddleware } = require("./graphql-server");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -307,6 +308,32 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 // Raw spec endpoint for ZAP api-scan (targets JSON, not the UI page)
 app.get("/api-docs.json", (_req, res) => res.json(openApiSpec));
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// Async startup — required because Apollo Server v4's expressMiddleware() can
+// only be called after server.start() resolves. All other routes are registered
+// synchronously above; only the Apollo mount and app.listen() are deferred here.
+// ─────────────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    // Apollo v4: must await server.start() before mounting
+    const apolloMiddleware = await createApolloMiddleware();
+
+    // Mount Apollo at /graphql — uses parameterised queries (secure).
+    // The intentionally vulnerable SQL injection targets remain at
+    // /graphql-insecure (express-graphql) for training purposes.
+    app.use("/graphql", apolloMiddleware);
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`  REST (insecure):    http://localhost:${PORT}/api/insecure-users`);
+      console.log(`  REST (secure):      http://localhost:${PORT}/api/safe-users`);
+      console.log(`  GraphQL (Apollo v4):http://localhost:${PORT}/graphql`);
+      console.log(`  GraphQL (insecure): http://localhost:${PORT}/graphql-insecure`);
+      console.log(`  GraphQL (secure):   http://localhost:${PORT}/graphql-secure`);
+      console.log(`  API docs:           http://localhost:${PORT}/api-docs`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
+})();

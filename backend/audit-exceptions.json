@@ -3,18 +3,12 @@
   "_review_date": "2026-07-01",
   "exceptions": [
     {
-      "ghsa": "GHSA-mp6q-xf9x-fwf7",
-      "package": "apollo-server",
-      "severity": "high",
-      "reason": "apollo-server v3 is EOL. This DoS affects startStandaloneServer() which is not used — we use the Express integration (apollo-server-express). Risk is low in this lab context. Real fix: migrate to @apollo/server v4.",
-      "fix_ticket": "TODO: migrate from apollo-server v3 to @apollo/server v4"
-    },
-    {
       "ghsa": "GHSA-9q82-xgwf-vj6h",
-      "package": "apollo-server-core",
+      "package": "@apollo/server",
       "severity": "moderate",
-      "reason": "XS-Search CSRF bypass. Requires a malicious page to make authenticated GraphQL requests via a logged-in browser session. Not applicable — this API uses Bearer token auth (Authorization header), which browsers never send cross-origin without explicit CORS approval. Not a session-cookie-based app.",
-      "fix_ticket": "TODO: migrate from apollo-server v3 to @apollo/server v4"
+      "reason": "XS-Search CSRF bypass via browser. Not applicable — this API uses Authorization header Bearer token auth, not session cookies. Browsers never send Authorization headers cross-origin without explicit CORS approval, which is tightly controlled in index.js. The attack vector requires a browser to make credentialled cross-site requests, which is not possible in this architecture.",
+      "why_not_upgrading_to_v5": "@apollo/server v5 removed the @apollo/server/express4 subpath export. The new Express integration path is not yet confirmed stable. Pinned to latest v4 (4.11.3) until v5 Express integration is verified.",
+      "fix_ticket": "TODO: verify @apollo/server v5 Express integration path and upgrade — revisit 2026-07-01"
     }
   ]
 }
