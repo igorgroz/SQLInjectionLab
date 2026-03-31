@@ -93,7 +93,7 @@ jobs:
 
       - name: Install
         working-directory: backend
-        run: npm ci --prefer-offline
+        run: npm ci
 
       - name: Audit
         working-directory: backend
@@ -166,7 +166,7 @@ jobs:
 
       - name: Install
         working-directory: frontend
-        run: npm ci --prefer-offline
+        run: npm ci
 
       - name: Audit (production deps only)
         working-directory: frontend

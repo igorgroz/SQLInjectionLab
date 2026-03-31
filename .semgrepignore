@@ -1,0 +1,25 @@
+# .semgrepignore
+# ─────────────────────────────────────────────────────────────────────────────
+# Files excluded from Semgrep SAST scanning.
+# Semgrep respects .gitignore by default; this file adds project-specific
+# suppressions on top of that.
+#
+# Format: same glob syntax as .gitignore
+# Docs: https://semgrep.dev/docs/ignoring-files-folders-code/
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Intentionally vulnerable files ───────────────────────────────────────────
+# These files contain deliberate SQL injection and other vulnerabilities
+# for training and CI/CD scanner validation purposes.
+# Semgrep findings in these files are expected and known — suppressing them
+# keeps the SAST gate meaningful for the rest of the codebase.
+backend/insecureRoutes.js
+backend/insecureGraphQL.js
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# ── Build output ──────────────────────────────────────────────────────────────
+frontend/build/
