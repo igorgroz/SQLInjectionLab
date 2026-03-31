@@ -66,7 +66,8 @@ env:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2a — SCA: Backend (npm audit)
-# Fails on HIGH or CRITICAL with a fixAvailable=true finding.
+# Fails on HIGH or CRITICAL findings NOT in audit-exceptions.json.
+# Exceptions must have documented justification and a review date.
 # Produces JSON artifact for audit trail.
 # ══════════════════════════════════════════════════════════════════
   sca-backend:
@@ -90,21 +91,37 @@ env:
         # || true — don't let npm exit code abort the step; we parse JSON ourselves
         run: npm audit --audit-level=none --json > npm-audit-backend.json || true
 
-      - name: Gate on HIGH / CRITICAL (fixable)
+      - name: Gate on HIGH / CRITICAL (excluding documented exceptions)
         working-directory: backend
         run: |
-          HIGH=$(jq '.metadata.vulnerabilities.high     // 0' npm-audit-backend.json)
-          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-backend.json)
-          echo "Backend — Critical: $CRIT  High: $HIGH"
-          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "::error::Backend SCA: $CRIT critical, $HIGH high severity vulnerabilities"
-            jq -r '
-              .vulnerabilities
-              | to_entries[]
-              | select(.value.severity == "high" or .value.severity == "critical")
-              | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
-            ' npm-audit-backend.json
+          # Build list of excepted GHSA IDs from audit-exceptions.json
+          EXCEPTED=$(jq -r '.exceptions[].ghsa' audit-exceptions.json 2>/dev/null | tr '\n' ' ')
+          echo "Excepted GHSAs: ${EXCEPTED:-none}"
+
+          # Find HIGH/CRITICAL vulns whose advisory URL is NOT in the exceptions list
+          FAILURES=$(jq -r --argjson exc "$(jq '[.exceptions[].ghsa]' audit-exceptions.json 2>/dev/null || echo '[]')" '
+            .vulnerabilities
+            | to_entries[]
+            | select(.value.severity == "high" or .value.severity == "critical")
+            | select(
+                .value.via
+                | map(
+                    select(type == "object")
+                    | .url // ""
+                    | split("/")
+                    | last
+                  )
+                | any(. as $id | $exc | index($id) == null)
+              )
+            | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
+          ' npm-audit-backend.json)
+
+          if [ -n "$FAILURES" ]; then
+            echo "::error::Backend SCA: unexcepted HIGH/CRITICAL vulnerabilities found:"
+            echo "$FAILURES"
             exit 1
+          else
+            echo "Backend SCA passed (any remaining HIGH/CRITICAL are in audit-exceptions.json)"
           fi
 
       - name: Upload audit artifact

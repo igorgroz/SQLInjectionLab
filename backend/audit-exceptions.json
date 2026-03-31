@@ -1,0 +1,20 @@
+{
+  "_comment": "SCA exceptions — CVEs accepted as known risk with justification.",
+  "_review_date": "2026-07-01",
+  "exceptions": [
+    {
+      "ghsa": "GHSA-mp6q-xf9x-fwf7",
+      "package": "apollo-server",
+      "severity": "high",
+      "reason": "apollo-server v3 is EOL. This DoS affects startStandaloneServer() which is not used — we use the Express integration (apollo-server-express). Risk is low in this lab context. Real fix: migrate to @apollo/server v4.",
+      "fix_ticket": "TODO: migrate from apollo-server v3 to @apollo/server v4"
+    },
+    {
+      "ghsa": "GHSA-9q82-xgwf-vj6h",
+      "package": "apollo-server-core",
+      "severity": "moderate",
+      "reason": "XS-Search CSRF bypass. Requires a malicious page to make authenticated GraphQL requests via a logged-in browser session. Not applicable — this API uses Bearer token auth (Authorization header), which browsers never send cross-origin without explicit CORS approval. Not a session-cookie-based app.",
+      "fix_ticket": "TODO: migrate from apollo-server v3 to @apollo/server v4"
+    }
+  ]
+}
