@@ -1,0 +1,441 @@
+name: Security Pipeline
+
+# ──────────────────────────────────────────────────────────────────
+# Trigger strategy:
+#   PRs      → SAST + SCA (fast gates, fail fast before merge)
+#   push main → full pipeline: SAST → SCA → build → Trivy → push →
+#               Cosign sign → DAST
+#   schedule  → weekly SCA re-run to catch newly published CVEs
+# ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    - cron: '0 2 * * 1'   # Weekly Monday 02:00 UTC — catches new CVEs
+
+permissions:
+  contents: read
+  security-events: write  # Upload SARIF to GitHub Security tab
+  packages: write         # Push to ghcr.io
+  id-token: write         # Cosign keyless signing via OIDC
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/sqlinj-frontend
+  BACKEND_IMAGE:  ghcr.io/${{ github.repository_owner }}/sqlinj-backend
+  NODE_VERSION: '18'
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 1 — SAST: Semgrep
+# Runs on every PR and every push to main.
+# Rules cover JavaScript, React, Node.js, OWASP Top 10, SQL injection.
+# Uploads SARIF so findings appear in the GitHub Security → Code Scanning tab.
+# Fails the pipeline on ERROR-severity findings.
+# ══════════════════════════════════════════════════════════════════
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          semgrep ci \
+            --config p/javascript \
+            --config p/react \
+            --config p/nodejs \
+            --config p/owasp-top-ten \
+            --config p/sql-injection \
+            --sarif --output semgrep.sarif \
+            --error          # exit 1 on findings at ERROR severity
+        env:
+          # Optional: set SEMGREP_APP_TOKEN to push results to semgrep.dev
+          # SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          SEMGREP_RULES: ""   # suppressed — rules passed via --config above
+
+      - name: Upload SARIF → GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()   # upload even on failure so devs can see findings
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 2a — SCA: Backend (npm audit)
+# Fails on HIGH or CRITICAL with a fixAvailable=true finding.
+# Produces JSON artifact for audit trail.
+# ══════════════════════════════════════════════════════════════════
+  sca-backend:
+    name: SCA — Backend (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        working-directory: backend
+        run: npm ci --prefer-offline
+
+      - name: Audit
+        working-directory: backend
+        # || true — don't let npm exit code abort the step; we parse JSON ourselves
+        run: npm audit --audit-level=none --json > npm-audit-backend.json || true
+
+      - name: Gate on HIGH / CRITICAL (fixable)
+        working-directory: backend
+        run: |
+          HIGH=$(jq '.metadata.vulnerabilities.high     // 0' npm-audit-backend.json)
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-backend.json)
+          echo "Backend — Critical: $CRIT  High: $HIGH"
+          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "::error::Backend SCA: $CRIT critical, $HIGH high severity vulnerabilities"
+            jq -r '
+              .vulnerabilities
+              | to_entries[]
+              | select(.value.severity == "high" or .value.severity == "critical")
+              | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
+            ' npm-audit-backend.json
+            exit 1
+          fi
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-backend
+          path: backend/npm-audit-backend.json
+          retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 2b — SCA: Frontend (npm audit)
+# Same logic as backend; runs in parallel.
+# ══════════════════════════════════════════════════════════════════
+  sca-frontend:
+    name: SCA — Frontend (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci --prefer-offline
+
+      - name: Audit
+        working-directory: frontend
+        run: npm audit --audit-level=none --json > npm-audit-frontend.json || true
+
+      - name: Gate on HIGH / CRITICAL (fixable)
+        working-directory: frontend
+        run: |
+          HIGH=$(jq '.metadata.vulnerabilities.high     // 0' npm-audit-frontend.json)
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-frontend.json)
+          echo "Frontend — Critical: $CRIT  High: $HIGH"
+          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "::error::Frontend SCA: $CRIT critical, $HIGH high severity vulnerabilities"
+            jq -r '
+              .vulnerabilities
+              | to_entries[]
+              | select(.value.severity == "high" or .value.severity == "critical")
+              | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
+            ' npm-audit-frontend.json
+            exit 1
+          fi
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-frontend
+          path: frontend/npm-audit-frontend.json
+          retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 3 — Build Docker images
+# Requires SAST + both SCA jobs to pass first.
+# Uses GitHub Actions cache (type=gha) to speed up layer reuse.
+# Images are loaded locally (no push yet); Trivy scans them next.
+# ══════════════════════════════════════════════════════════════════
+  build:
+    name: Build Docker Images
+    needs: [sast, sca-backend, sca-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to:   type=gha,scope=frontend,mode=max
+
+      - name: Build backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to:   type=gha,scope=backend,mode=max
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 4 — Container scan: Trivy
+# Scans both images for OS and language-level CVEs.
+# Gates on HIGH and CRITICAL with a fix available (ignore-unfixed: true).
+# Uploads SARIF to GitHub Security → Code Scanning.
+# .trivyignore at repo root lets you suppress accepted-risk CVEs.
+# ══════════════════════════════════════════════════════════════════
+  container-scan:
+    name: Container Scan (Trivy)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Rebuild from cache — avoids passing image tarballs between jobs
+      - name: Rebuild frontend (from cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+
+      - name: Rebuild backend (from cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+
+      - name: Trivy — scan frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref:      ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          format:         sarif
+          output:         trivy-frontend.sarif
+          severity:       HIGH,CRITICAL
+          exit-code:      '1'
+          ignore-unfixed: true
+          trivyignores:   .trivyignore
+
+      - name: Upload frontend SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+          category:   trivy-frontend
+
+      - name: Trivy — scan backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          format:         sarif
+          output:         trivy-backend.sarif
+          severity:       HIGH,CRITICAL
+          exit-code:      '1'
+          ignore-unfixed: true
+          trivyignores:   .trivyignore
+
+      - name: Upload backend SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-backend.sarif
+          category:   trivy-backend
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 5 — Push & Sign (Cosign keyless)
+# Only runs on push to main/master — not on PRs.
+# Pushes both images to ghcr.io, then signs them using Cosign
+# keyless mode (GitHub OIDC → Sigstore Fulcio CA, logged to Rekor).
+# No private key to manage — provenance is cryptographically bound
+# to this workflow run's OIDC identity.
+# Verifies own signatures before the DAST job proceeds.
+# ══════════════════════════════════════════════════════════════════
+  push-and-sign:
+    name: Push & Sign (Cosign keyless)
+    needs: container-scan
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write   # MUST be present for keyless Cosign
+    outputs:
+      frontend-digest: ${{ steps.push-frontend.outputs.digest }}
+      backend-digest:  ${{ steps.push-backend.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push frontend
+        id: push-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+
+      - name: Push backend
+        id: push-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+
+      # Sign by digest (not tag) — tags are mutable; digests are not.
+      - name: Sign frontend image
+        run: |
+          cosign sign --yes \
+            ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
+
+      - name: Sign backend image
+        run: |
+          cosign sign --yes \
+            ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
+
+      # Self-verify immediately — if this step fails the DAST job won't run,
+      # and you'll know the signing or identity binding broke.
+      - name: Verify signatures
+        run: |
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
+
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 6 — DAST: OWASP ZAP
+# Only on push to main (after images are signed).
+# Pulls signed images from GHCR, starts the stack via
+# docker-compose.dast.yml (which disables Entra ID auth and uses
+# a pre-issued test JWT so ZAP can reach API endpoints).
+# Runs two scans:
+#   baseline — spider + passive analysis of the app surface
+#   api-scan — active scan against the OpenAPI/Swagger spec
+# Both produce HTML/JSON reports uploaded as artifacts.
+# ══════════════════════════════════════════════════════════════════
+  dast:
+    name: DAST (OWASP ZAP)
+    needs: push-and-sign
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start application stack (DAST mode)
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.dast.yml \
+            up -d --wait --wait-timeout 60
+        env:
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          BACKEND_IMAGE:  ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          POSTGRES_PASSWORD: ${{ secrets.DAST_DB_PASSWORD }}
+          DAST_JWT_SECRET:   ${{ secrets.DAST_JWT_SECRET }}
+
+      - name: Health-check backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5001/health; then
+              echo "Backend ready after ${i}s"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: ZAP — Baseline scan (passive + spider)
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target:        'http://localhost:5001'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options:   '-a'       # include ajax spider
+          fail_action:   true       # FAIL on WARN or higher (configurable in rules.tsv)
+          artifact_name: zap-baseline-report
+        continue-on-error: true     # collect report even on failure
+
+      - name: ZAP — API scan (active, against OpenAPI spec)
+        uses: zaproxy/action-api-scan@v0.7.0
+        with:
+          target:        'http://localhost:5001/api-docs.json'
+          format:        openapi
+          rules_file_name: '.zap/rules.tsv'
+          fail_action:   false      # informational on first run; flip to true once baseline is clean
+          artifact_name: zap-api-report
+        continue-on-error: true
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.dast.yml down -v

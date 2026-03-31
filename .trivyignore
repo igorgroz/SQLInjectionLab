@@ -1,0 +1,35 @@
+# .trivyignore
+# ─────────────────────────────────────────────────────────────────────────────
+# CVEs accepted as known risk, with documented justification.
+#
+# Format:
+#   CVE-YYYY-NNNNN  # Justification: why accepted, when to revisit
+#
+# Trivy uses this file when run with --ignorefile .trivyignore
+# The GitHub Actions workflow passes it via trivyignores: .trivyignore
+#
+# IMPORTANT: This file should be reviewed every quarter or after any major
+# image base change. A suppressed CVE that becomes exploitable in context is
+# still a real risk regardless of what's in this file.
+#
+# To list all CVEs currently being suppressed:
+#   grep -v '^#' .trivyignore | grep -v '^$'
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Example (uncomment and fill in when you have real accepted-risk CVEs):
+#
+# CVE-2023-XXXXX   # pkg: openssl, fixed in: 3.x, status: no fix available in
+#                  # node:18-alpine yet; network not exposed; accepted until
+#                  # upstream alpine updates. Revisit: 2026-06-01
+#
+# CVE-2023-YYYYY   # pkg: some-transitive-dep, fixAvailable: false, severity:
+#                  # HIGH but requires local access — lab env only, not
+#                  # internet-reachable. Revisit: 2026-06-01
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Notes on the gating strategy:
+#   The pipeline fails on HIGH/CRITICAL where ignore-unfixed: true, meaning
+#   Trivy only fails if a fix EXISTS but hasn't been applied. CVEs with no
+#   upstream fix available won't fail the build — but should be tracked here
+#   with a revisit date so they don't become permanently ignored.
+# ─────────────────────────────────────────────────────────────────────────────

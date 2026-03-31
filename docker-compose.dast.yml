@@ -1,0 +1,81 @@
+# docker-compose.dast.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# DAST override — used ONLY by the GitHub Actions security pipeline.
+# Apply with:  docker compose -f docker-compose.yml -f docker-compose.dast.yml up
+#
+# This overlay achieves two goals:
+#
+# 1. BYPASS ENTRA ID AUTH
+#    The backend is switched to a static JWT secret (DAST_JWT_SECRET env var).
+#    A pre-minted, long-lived test token is injected so ZAP can authenticate
+#    and reach protected endpoints without hitting Microsoft's /token endpoint.
+#    AUTH_MODE=dast tells the backend middleware to accept this token instead
+#    of validating against the Entra ID JWKS URI.
+#
+# 2. NO REAL DATA
+#    The DB is ephemeral (data volume removed in CI via docker compose down -v).
+#    DB init SQL seeds minimal fixture data for ZAP to work with.
+#
+# Security note: DAST_JWT_SECRET and DAST_BEARER_TOKEN must be stored as
+# GitHub Actions secrets — never commit real values here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  backend:
+    # Pull the image just pushed and signed by the push-and-sign job.
+    # The BACKEND_IMAGE env var is set by the CI step.
+    image: ${BACKEND_IMAGE:-sqlinj-backend:latest}
+    environment:
+      # Switch auth middleware to local JWT validation (bypass Entra ID JWKS)
+      AUTH_MODE:          dast
+      JWT_SECRET:         ${DAST_JWT_SECRET}
+
+      # Entra ID vars still need to be present (avoid startup crash on env checks)
+      # Point to localhost — they won't be called in AUTH_MODE=dast
+      AZURE_TENANT_ID:    00000000-0000-0000-0000-000000000000
+      AZURE_CLIENT_ID:    00000000-0000-0000-0000-000000000000
+      AZURE_API_APP_ID:   00000000-0000-0000-0000-000000000000
+
+      # Enable /health and /api-docs without auth so ZAP can spider them
+      HEALTH_ENDPOINT_PUBLIC:  "true"
+      SWAGGER_ENDPOINT_PUBLIC: "true"
+
+      # Verbose logging helps when reviewing ZAP scan output
+      LOG_LEVEL: debug
+
+    # Expose on host so ZAP (running as a sibling container) can reach it.
+    # Port matches base docker-compose.yml (5001) so the backend's default
+    # PORT=5001 is consistent across both compose files.
+    ports:
+      - "5001:5001"
+
+  frontend:
+    # Pull the image just pushed and signed
+    image: ${FRONTEND_IMAGE:-sqlinj-frontend:latest}
+    ports:
+      - "3000:80"
+
+  db:
+    # Ephemeral — no named volume; torn down with docker compose down -v
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: []   # Override any named volume defined in docker-compose.yml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ZAP authentication context
+# ─────────────────────────────────────────────────────────────────────────────
+# The ZAP actions receive a DAST_BEARER_TOKEN (pre-minted test JWT signed with
+# DAST_JWT_SECRET). Inject it via the ZAP replacer rule in .zap/rules.tsv or
+# pass it as a ZAP command-line option:
+#
+#   -config replacer.full_list(0).description=auth
+#   -config replacer.full_list(0).enabled=true
+#   -config replacer.full_list(0).matchtype=REQ_HEADER
+#   -config replacer.full_list(0).matchstr=Authorization
+#   -config replacer.full_list(0).replacement="Bearer ${DAST_BEARER_TOKEN}"
+#
+# For this project, the baseline scan uses -a (ajax spider) against the app
+# surface, and the API scan targets /api-docs (OpenAPI spec).  Auth injection
+# is handled via .zap/rules.tsv.
+# ─────────────────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@
     "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.3",
     "jwks-rsa": "^4.0.1",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "swagger-ui-express": "^5.0.1"
   }
 }

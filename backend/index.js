@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const swaggerUi = require("swagger-ui-express");
 
 const insecureRoutes = require("./insecureRoutes");
 const secureRoutes = require("./secureRoutes");
@@ -39,6 +40,272 @@ app.get("/", (req, res) => {
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OpenAPI spec — used by OWASP ZAP api-scan in the CI/CD security pipeline.
+// Defines the full API surface so ZAP can perform targeted active scanning
+// rather than relying on the spider alone.
+//
+// The insecure routes are intentionally included — they are the SQL injection
+// targets and the whole point of running the DAST scan against them.
+// ─────────────────────────────────────────────────────────────────────────────
+const openApiSpec = {
+  openapi: "3.0.3",
+  info: {
+    title: "SQLInjectionLab API",
+    version: "1.0.0",
+    description:
+      "Training API with intentionally vulnerable (insecure) and secure routes. " +
+      "Insecure routes contain SQL injection vulnerabilities for scanner validation.",
+  },
+  servers: [{ url: `http://localhost:${process.env.PORT || 5001}` }],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        description:
+          "Entra ID JWT (production) or DAST test JWT signed with DAST_JWT_SECRET (CI). " +
+          "Token must include scp claim with required scopes (user.read / user.write).",
+      },
+    },
+    schemas: {
+      User: {
+        type: "object",
+        properties: {
+          userid:   { type: "integer" },
+          username: { type: "string" },
+          email:    { type: "string" },
+        },
+      },
+      Clothing: {
+        type: "object",
+        properties: {
+          clothid:     { type: "integer" },
+          name:        { type: "string" },
+          description: { type: "string" },
+        },
+      },
+      Error: {
+        type: "object",
+        properties: {
+          error:  { type: "string" },
+          detail: { type: "string" },
+        },
+      },
+    },
+  },
+  paths: {
+    "/health": {
+      get: {
+        summary: "Health check (public)",
+        operationId: "healthCheck",
+        responses: {
+          200: { description: "Service is healthy" },
+        },
+      },
+    },
+
+    // ── Insecure routes (SQL injection training targets) ──────────────────
+    "/api/insecure-users": {
+      get: {
+        summary: "Get all users (VULNERABLE — SQL injection)",
+        operationId: "insecureGetUsers",
+        tags: ["Insecure"],
+        responses: {
+          200: { description: "List of users" },
+          500: { description: "DB error (may leak query details)" },
+        },
+      },
+    },
+    "/api/insecure-users/{userid}": {
+      get: {
+        summary: "Get user by ID (VULNERABLE — SQL injection via path param)",
+        operationId: "insecureGetUser",
+        tags: ["Insecure"],
+        parameters: [
+          { name: "userid", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          200: { description: "User object" },
+          500: { description: "DB error" },
+        },
+      },
+    },
+    "/api/insecure-users/{userid}/clothes": {
+      get: {
+        summary: "Get clothing for user (VULNERABLE — SQL injection via path param)",
+        operationId: "insecureGetUserClothes",
+        tags: ["Insecure"],
+        parameters: [
+          { name: "userid", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          200: { description: "List of clothing" },
+          500: { description: "DB error" },
+        },
+      },
+    },
+    "/api/insecure-users/clothes": {
+      post: {
+        summary: "Add clothing to user (VULNERABLE — SQL injection via body)",
+        operationId: "insecureAddCloth",
+        tags: ["Insecure"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  userid:  { type: "integer" },
+                  clothid: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: "Clothing added" },
+          500: { description: "DB error" },
+        },
+      },
+    },
+    "/api/insecure-users/remove-cloth": {
+      post: {
+        summary: "Remove clothing from user (VULNERABLE — SQL injection via body)",
+        operationId: "insecureRemoveCloth",
+        tags: ["Insecure"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  userid:  { type: "integer" },
+                  clothid: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: "Clothing removed" },
+          500: { description: "DB error" },
+        },
+      },
+    },
+
+    // ── Secure routes (parameterised queries, JWT-protected) ──────────────
+    "/api/safe-users": {
+      get: {
+        summary: "Get all users (secure — requires user.read scope)",
+        operationId: "safeGetUsers",
+        tags: ["Secure"],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: "List of users", content: { "application/json": { schema: { type: "array", items: { "$ref": "#/components/schemas/User" } } } } },
+          401: { description: "Missing or invalid token", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          403: { description: "Insufficient scope" },
+        },
+      },
+    },
+    "/api/safe-users/{userid}": {
+      get: {
+        summary: "Get user by ID (secure)",
+        operationId: "safeGetUser",
+        tags: ["Secure"],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "userid", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: {
+          200: { description: "User object" },
+          401: { description: "Missing or invalid token" },
+          403: { description: "Insufficient scope" },
+        },
+      },
+    },
+    "/api/safe-users/{userid}/clothes": {
+      get: {
+        summary: "Get clothing for user (secure)",
+        operationId: "safeGetUserClothes",
+        tags: ["Secure"],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "userid", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: {
+          200: { description: "List of clothing" },
+          401: { description: "Missing or invalid token" },
+          403: { description: "Insufficient scope" },
+        },
+      },
+    },
+    "/api/safe-users/clothes": {
+      post: {
+        summary: "Add clothing to user (secure)",
+        operationId: "safeAddCloth",
+        tags: ["Secure"],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["userid", "clothid"],
+                properties: {
+                  userid:  { type: "integer" },
+                  clothid: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: "Clothing added" },
+          401: { description: "Missing or invalid token" },
+          403: { description: "Insufficient scope" },
+        },
+      },
+    },
+    "/api/safe-users/remove-cloth": {
+      post: {
+        summary: "Remove clothing from user (secure)",
+        operationId: "safeRemoveCloth",
+        tags: ["Secure"],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["userid", "clothid"],
+                properties: {
+                  userid:  { type: "integer" },
+                  clothid: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: "Clothing removed" },
+          401: { description: "Missing or invalid token" },
+          403: { description: "Insufficient scope" },
+        },
+      },
+    },
+  },
+};
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
+// Raw spec endpoint for ZAP api-scan (targets JSON, not the UI page)
+app.get("/api-docs.json", (_req, res) => res.json(openApiSpec));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
