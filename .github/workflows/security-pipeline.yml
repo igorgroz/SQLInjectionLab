@@ -60,9 +60,7 @@ jobs:
             --output semgrep.sarif \
             --error \
             .
-        env:
-          # Optional: set SEMGREP_APP_TOKEN to push results to semgrep.dev
-          # SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        # Optional: add SEMGREP_APP_TOKEN secret to push results to semgrep.dev
 
       - name: Ensure SARIF exists (semgrep writes it before exit; guard for edge cases)
         if: always()
@@ -145,7 +143,14 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2b — SCA: Frontend (npm audit)
-# Same logic as backend; runs in parallel.
+# Audits PRODUCTION dependencies only (--omit=dev).
+#
+# Rationale: react-scripts, @testing-library/*, and tailwindcss are
+# devDependencies — build-time tools only. The deployed artifact is
+# nginx:alpine serving static files (see frontend/Dockerfile Stage 2),
+# which contains none of this build tooling. Auditing dev deps as
+# production risk would produce ~49 false-positive findings from
+# react-scripts' abandoned CRA transitive dependencies.
 # ══════════════════════════════════════════════════════════════════
   sca-frontend:
     name: SCA — Frontend (npm audit)
@@ -163,9 +168,11 @@ jobs:
         working-directory: frontend
         run: npm ci --prefer-offline
 
-      - name: Audit
+      - name: Audit (production deps only)
         working-directory: frontend
-        run: npm audit --audit-level=none --json > npm-audit-frontend.json || true
+        # --omit=dev excludes react-scripts and testing libs (devDependencies)
+        # which contain unfixable CRA build-tool CVEs irrelevant to the runtime app
+        run: npm audit --audit-level=none --omit=dev --json > npm-audit-frontend.json || true
 
       - name: Gate on HIGH / CRITICAL (fixable)
         working-directory: frontend
