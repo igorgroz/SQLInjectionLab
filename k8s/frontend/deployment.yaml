@@ -18,17 +18,17 @@ spec:
           image: sqlinjproject-frontend:latest
           imagePullPolicy: Never
           ports:
-            - containerPort: 80
+            - containerPort: 8080  # nginx-unprivileged listens on 8080 (non-root)
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
           resources:
@@ -38,3 +38,7 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101  # nginx user in nginxinc/nginx-unprivileged:alpine
+            allowPrivilegeEscalation: false
