@@ -3,7 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy package manifests + .npmrc before installing.
+# .npmrc sets legacy-peer-deps=true — required for tailwindcss@4 + react-scripts@5
+# peer dep resolution. Must be present before npm install for Docker layer caching.
+COPY package.json package-lock.json .npmrc ./
 RUN npm install
 
 COPY . .

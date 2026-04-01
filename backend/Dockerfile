@@ -4,8 +4,11 @@ FROM node:18
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy only package.json and package-lock.json first to leverage Docker caching
-COPY package*.json ./
+# Copy package manifests + .npmrc before installing.
+# .npmrc sets legacy-peer-deps=true — required because express-graphql@0.12
+# (graphql peer ^15) conflicts with @apollo/server@4 (graphql peer ^16).
+# Must be copied here (not after npm ci) to benefit Docker layer caching.
+COPY package.json package-lock.json .npmrc ./
 
 # Install production dependencies
 RUN npm ci --omit=dev
