@@ -23,4 +23,8 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 
+# Explicitly declare non-root user — satisfies semgrep dockerfile.security.missing-user.
+# nginx-unprivileged:alpine pre-configures all directories for this user (UID 101).
+USER nginx
+
 CMD ["nginx", "-g", "daemon off;"]

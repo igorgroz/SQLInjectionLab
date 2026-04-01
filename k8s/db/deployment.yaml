@@ -54,7 +54,9 @@ spec:
               memory: "512Mi"
               cpu: "500m"
           securityContext:
-            runAsNonRoot: false  # postgres image requires root to initialise  # nosemgrep: yaml.kubernetes.security.run-as-non-root-unsafe-value.run-as-non-root-unsafe-value
+            # postgres:16 requires root to initialise the data directory — accepted risk.
+            # Privilege escalation is explicitly blocked below.
+            runAsNonRoot: false # nosemgrep: yaml.kubernetes.security.run-as-non-root-unsafe-value.run-as-non-root-unsafe-value
             allowPrivilegeEscalation: false
       volumes:
         - name: postgres-storage
