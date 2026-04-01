@@ -15,6 +15,7 @@
 # keeps the SAST gate meaningful for the rest of the codebase.
 backend/insecureRoutes.js
 backend/insecureGraphQL.js
+backend/norestapi-index.js
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
