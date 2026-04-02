@@ -66,6 +66,40 @@ jobs:
         if: always()
         run: test -f semgrep.sarif || echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
 
+      # Emit findings as ::error annotations so they appear directly in the
+      # Actions log and PR diff — without this, --sarif --output suppresses
+      # all human-readable output and findings are only visible in the
+      # GitHub Security → Code Scanning tab.
+      - name: Annotate findings in Actions log
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, sys, os
+          sarif_path = "semgrep.sarif"
+          if not os.path.exists(sarif_path):
+              print("No SARIF file to annotate")
+              sys.exit(0)
+          with open(sarif_path) as f:
+              sarif = json.load(f)
+          count = 0
+          for run in sarif.get("runs", []):
+              for result in run.get("results", []):
+                  level  = result.get("level", "warning")
+                  msg    = result["message"]["text"].replace("\n", " ")[:200]
+                  rule   = result["ruleId"]
+                  for loc in result.get("locations", []):
+                      try:
+                          uri  = loc["physicalLocation"]["artifactLocation"]["uri"]
+                          line = loc["physicalLocation"]["region"]["startLine"]
+                          gh   = "error" if level == "error" else "warning"
+                          print(f"::{gh} file={uri},line={line}::[{rule}] {msg}")
+                          count += 1
+                      except (KeyError, IndexError):
+                          pass
+          if count == 0:
+              print("No findings — SAST clean")
+          EOF
+
       - name: Upload SARIF → GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: always()   # upload even on failure so devs can see findings
@@ -301,6 +335,7 @@ jobs:
           category:   trivy-frontend
 
       - name: Trivy — scan backend
+        if: always()   # run even when frontend scan fails — both images must be scanned
         uses: aquasecurity/trivy-action@master
         with:
           image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}

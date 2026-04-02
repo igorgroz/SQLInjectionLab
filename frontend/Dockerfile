@@ -18,6 +18,12 @@ RUN npm run build
 # k8s service maps external port 80 → targetPort 8080 so the ingress is unchanged.
 FROM nginxinc/nginx-unprivileged:alpine
 
+# Patch Alpine packages to eliminate Trivy-flagged CVEs.
+# Must run as root; we drop back to nginx immediately after.
+USER root
+RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
+USER nginx
+
 # Copy built React app from Stage 1
 COPY --from=builder /app/build /usr/share/nginx/html
 
