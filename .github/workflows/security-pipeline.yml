@@ -316,6 +316,35 @@ jobs:
           tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=backend
 
+      # ── Human-readable scan (no gate) — makes findings visible in the Actions log.
+      # format: sarif + output: file suppresses stdout, so without this step you
+      # can only see findings in the GitHub Security tab. Run both images here so
+      # the full picture is always logged regardless of which image fails the gate.
+      - name: Trivy — log findings (table, no gate)
+        if: always()
+        run: |
+          echo "════════════════════════════════════"
+          echo "  TRIVY FRONTEND — table output"
+          echo "════════════════════════════════════"
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --format table \
+            --exit-code 0 \
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} || true
+          echo ""
+          echo "════════════════════════════════════"
+          echo "  TRIVY BACKEND — table output"
+          echo "════════════════════════════════════"
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --format table \
+            --exit-code 0 \
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }} || true
+
       - name: Trivy — scan frontend
         uses: aquasecurity/trivy-action@master
         with:
