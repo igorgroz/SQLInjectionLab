@@ -320,12 +320,16 @@ jobs:
       # format: sarif + output: file suppresses stdout entirely, so without these
       # steps findings are only visible in the GitHub Security tab.
       # Using trivy-action (not a raw shell step) so Trivy is guaranteed in PATH.
+      # ── Human-readable scans (no gate) — makes CVE findings visible in the Actions log.
+      # scanners: vuln — vulnerability findings only; secret scanning is a separate concern
+      # that requires its own allowlist and shouldn't be mixed into the CVE severity gate.
       - name: Trivy — log frontend findings (table, no gate)
         if: always()
         uses: aquasecurity/trivy-action@master
         with:
           image-ref:      ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format:         table
+          scanners:       vuln
           severity:       HIGH,CRITICAL
           exit-code:      '0'
           ignore-unfixed: true
@@ -337,17 +341,23 @@ jobs:
         with:
           image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           format:         table
+          scanners:       vuln
           severity:       HIGH,CRITICAL
           exit-code:      '0'
           ignore-unfixed: true
           trivyignores:   .trivyignore
 
+      # ── CVE gate: vuln scanner only.
+      # Secret scanning belongs in a dedicated job with a .trivyignore-secrets
+      # allowlist — npm cache tarballs, test fixtures, and example configs
+      # produce high false-positive rates when mixed into the CVE severity gate.
       - name: Trivy — scan frontend
         uses: aquasecurity/trivy-action@master
         with:
           image-ref:      ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format:         sarif
           output:         trivy-frontend.sarif
+          scanners:       vuln
           severity:       HIGH,CRITICAL
           exit-code:      '1'
           ignore-unfixed: true
@@ -367,6 +377,7 @@ jobs:
           image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           format:         sarif
           output:         trivy-backend.sarif
+          scanners:       vuln
           severity:       HIGH,CRITICAL
           exit-code:      '1'
           ignore-unfixed: true

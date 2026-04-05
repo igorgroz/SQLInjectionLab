@@ -17,7 +17,7 @@ RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
 # These live at /usr/local/lib/node_modules/npm/node_modules/ — not in the
 # app's own node_modules — so npm update / package.json overrides don't reach them.
 # npm@latest ships node-tar 6.2.1+, minimatch 9.x, glob 10.x, cross-spawn 7.0.5+.
-RUN npm install -g npm@latest
+RUN npm install -g npm@latest && npm cache clean --force
 
 # Copy package manifests + .npmrc before installing.
 # .npmrc sets legacy-peer-deps=true — required because express-graphql@0.12
