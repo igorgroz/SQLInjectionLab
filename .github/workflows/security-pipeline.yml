@@ -363,6 +363,20 @@ jobs:
           ignore-unfixed: true
           trivyignores:   .trivyignore
 
+      - name: Print frontend SARIF findings
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          path = "trivy-frontend.sarif"
+          if not os.path.exists(path):
+              print("trivy-frontend.sarif not found")
+              sys.exit(0)
+          data = json.load(open(path))
+          results = [r.get("ruleId","?") for run in data.get("runs",[]) for r in run.get("results",[])]
+          print("Frontend findings:", results if results else "NONE — clean")
+          EOF
+
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v4
         if: always()
@@ -382,6 +396,20 @@ jobs:
           exit-code:      '1'
           ignore-unfixed: true
           trivyignores:   .trivyignore
+
+      - name: Print backend SARIF findings
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          path = "trivy-backend.sarif"
+          if not os.path.exists(path):
+              print("trivy-backend.sarif not found")
+              sys.exit(0)
+          data = json.load(open(path))
+          results = [r.get("ruleId","?") for run in data.get("runs",[]) for r in run.get("results",[])]
+          print("Backend findings:", results if results else "NONE — clean")
+          EOF
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v4
