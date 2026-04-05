@@ -305,7 +305,7 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          trivy-version: ${{ env.TRIVY_VERSION }}
+          version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format: table
           scanners: vuln
@@ -318,7 +318,7 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          trivy-version: ${{ env.TRIVY_VERSION }}
+          version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           format: table
           scanners: vuln
@@ -331,7 +331,7 @@ jobs:
         id: trivy_frontend
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          trivy-version: ${{ env.TRIVY_VERSION }}
+          version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format: sarif
           output: trivy-frontend.sarif
@@ -387,7 +387,7 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          trivy-version: ${{ env.TRIVY_VERSION }}
+          version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           format: sarif
           output: trivy-backend.sarif
