@@ -33,3 +33,22 @@
 #   upstream fix available won't fail the build — but should be tracked here
 #   with a revisit date so they don't become permanently ignored.
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ── ACCEPTED RISK ─────────────────────────────────────────────────────────────
+
+# CVE-2026-33671  pkg: picomatch 4.0.3 → fixed in 4.0.4
+#   path:   /usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch/
+#   chain:  npm → tinyglobby → picomatch (npm-internal glob tooling)
+#   impact: ReDoS via crafted extglob patterns in picomatch
+#   why accepted:
+#     - picomatch is used by npm's tinyglobby for file discovery during package
+#       operations. npm does not run in the production container — the CMD is
+#       `node /app/index.js` as a non-root user. There is no code path that
+#       passes user-controlled input to picomatch at runtime.
+#     - picomatch 4.0.4 has been released but has not yet propagated into
+#       npm@latest's bundled dependency tree. This cannot be patched via
+#       package.json overrides as it is npm's internal transitive dep.
+#   action: monitor npm releases; remove this entry once npm@latest bundles
+#           tinyglobby with picomatch >= 4.0.4 and rebuild the image.
+#   revisit: 2026-07-05
+CVE-2026-33671
