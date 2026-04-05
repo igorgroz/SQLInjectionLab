@@ -264,8 +264,8 @@ jobs:
           push: false
           load: true
           tags: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=frontend
-          cache-to:   type=gha,scope=frontend,mode=max
+          cache-from: type=gha,scope=frontend-v2
+          cache-to:   type=gha,scope=frontend-v2,mode=max
 
       - name: Build backend
         uses: docker/build-push-action@v5
@@ -275,8 +275,8 @@ jobs:
           push: false
           load: true
           tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=backend
-          cache-to:   type=gha,scope=backend,mode=max
+          cache-from: type=gha,scope=backend-v2
+          cache-to:   type=gha,scope=backend-v2,mode=max
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 4 — Container scan: Trivy
@@ -304,7 +304,7 @@ jobs:
           push: false
           load: true
           tags: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=frontend
+          cache-from: type=gha,scope=frontend-v2
 
       - name: Rebuild backend (from cache)
         uses: docker/build-push-action@v5
@@ -314,7 +314,7 @@ jobs:
           push: false
           load: true
           tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=backend
+          cache-from: type=gha,scope=backend-v2
 
       # ── Human-readable scans (no gate) — makes findings visible in the Actions log.
       # format: sarif + output: file suppresses stdout entirely, so without these
@@ -436,7 +436,7 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
             ${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=gha,scope=frontend
+          cache-from: type=gha,scope=frontend-v2
 
       - name: Push backend
         id: push-backend
@@ -448,7 +448,7 @@ jobs:
           tags: |
             ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
             ${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=gha,scope=backend
+          cache-from: type=gha,scope=backend-v2
 
       # Sign by digest (not tag) — tags are mutable; digests are not.
       - name: Sign frontend image
