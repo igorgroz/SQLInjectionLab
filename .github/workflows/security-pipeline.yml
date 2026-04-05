@@ -2,7 +2,7 @@ name: Security Pipeline
 
 # ──────────────────────────────────────────────────────────────────
 # Trigger strategy:
-#   PRs      → SAST + SCA (fast gates, fail fast before merge)
+#   PRs       → SAST + SCA (fast gates, fail fast before merge)
 #   push main → full pipeline: SAST → SCA → build → Trivy → push →
 #               Cosign sign → DAST
 #   schedule  → weekly SCA re-run to catch newly published CVEs
@@ -24,8 +24,10 @@ permissions:
 env:
   REGISTRY: ghcr.io
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/sqlinj-frontend
-  BACKEND_IMAGE:  ghcr.io/${{ github.repository_owner }}/sqlinj-backend
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/sqlinj-backend
   NODE_VERSION: '20'
+  TRIVY_VERSION: '0.69.3'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
 
@@ -38,6 +40,7 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
   sast:
     name: SAST (Semgrep)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
@@ -45,10 +48,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Semgrep
-        # semgrep scan (not semgrep ci) — ci subcommand requires semgrep.dev
-        # connectivity and has a different flag set. scan is self-contained.
-        # --error: exit 1 if any finding at ERROR severity is detected.
-        # SARIF is written before exit so the upload step always has a file.
         run: |
           semgrep scan \
             --config p/javascript \
@@ -60,16 +59,11 @@ jobs:
             --output semgrep.sarif \
             --error \
             .
-        # Optional: add SEMGREP_APP_TOKEN secret to push results to semgrep.dev
 
       - name: Ensure SARIF exists (semgrep writes it before exit; guard for edge cases)
         if: always()
         run: test -f semgrep.sarif || echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
 
-      # Emit findings as ::error annotations so they appear directly in the
-      # Actions log and PR diff — without this, --sarif --output suppresses
-      # all human-readable output and findings are only visible in the
-      # GitHub Security → Code Scanning tab.
       - name: Annotate findings in Actions log
         if: always()
         run: |
@@ -86,7 +80,7 @@ jobs:
               for result in run.get("results", []):
                   level  = result.get("level", "warning")
                   msg    = result["message"]["text"].replace("\n", " ")[:200]
-                  rule   = result["ruleId"]
+                  rule   = result.get("ruleId", "unknown-rule")
                   for loc in result.get("locations", []):
                       try:
                           uri  = loc["physicalLocation"]["artifactLocation"]["uri"]
@@ -102,7 +96,7 @@ jobs:
 
       - name: Upload SARIF → GitHub Security
         uses: github/codeql-action/upload-sarif@v4
-        if: always()   # upload even on failure so devs can see findings
+        if: always()
         with:
           sarif_file: semgrep.sarif
           category: semgrep
@@ -115,6 +109,7 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
   sca-backend:
     name: SCA — Backend (npm audit)
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,17 +126,14 @@ jobs:
 
       - name: Audit
         working-directory: backend
-        # || true — don't let npm exit code abort the step; we parse JSON ourselves
         run: npm audit --audit-level=none --json > npm-audit-backend.json || true
 
       - name: Gate on HIGH / CRITICAL (excluding documented exceptions)
         working-directory: backend
         run: |
-          # Build list of excepted GHSA IDs from audit-exceptions.json
           EXCEPTED=$(jq -r '.exceptions[].ghsa' audit-exceptions.json 2>/dev/null | tr '\n' ' ')
           echo "Excepted GHSAs: ${EXCEPTED:-none}"
 
-          # Find HIGH/CRITICAL vulns whose advisory URL is NOT in the exceptions list
           FAILURES=$(jq -r --argjson exc "$(jq '[.exceptions[].ghsa]' audit-exceptions.json 2>/dev/null || echo '[]')" '
             .vulnerabilities
             | to_entries[]
@@ -178,16 +170,10 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
 # JOB 2b — SCA: Frontend (npm audit)
 # Audits PRODUCTION dependencies only (--omit=dev).
-#
-# Rationale: react-scripts, @testing-library/*, and tailwindcss are
-# devDependencies — build-time tools only. The deployed artifact is
-# nginx:alpine serving static files (see frontend/Dockerfile Stage 2),
-# which contains none of this build tooling. Auditing dev deps as
-# production risk would produce ~49 false-positive findings from
-# react-scripts' abandoned CRA transitive dependencies.
 # ══════════════════════════════════════════════════════════════════
   sca-frontend:
     name: SCA — Frontend (npm audit)
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -204,8 +190,6 @@ jobs:
 
       - name: Audit (production deps only)
         working-directory: frontend
-        # --omit=dev excludes react-scripts and testing libs (devDependencies)
-        # which contain unfixable CRA build-tool CVEs irrelevant to the runtime app
         run: npm audit --audit-level=none --omit=dev --json > npm-audit-frontend.json || true
 
       - name: Gate on HIGH / CRITICAL (fixable)
@@ -241,6 +225,7 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
   build:
     name: Build Docker Images
+    if: github.event_name == 'push'
     needs: [sast, sca-backend, sca-frontend]
     runs-on: ubuntu-latest
     steps:
@@ -265,7 +250,7 @@ jobs:
           load: true
           tags: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=frontend-v2
-          cache-to:   type=gha,scope=frontend-v2,mode=max
+          cache-to: type=gha,scope=frontend-v2,mode=max
 
       - name: Build backend
         uses: docker/build-push-action@v5
@@ -276,7 +261,7 @@ jobs:
           load: true
           tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=backend-v2
-          cache-to:   type=gha,scope=backend-v2,mode=max
+          cache-to: type=gha,scope=backend-v2,mode=max
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 4 — Container scan: Trivy
@@ -287,6 +272,7 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
   container-scan:
     name: Container Scan (Trivy)
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -295,7 +281,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Rebuild from cache — avoids passing image tarballs between jobs
       - name: Rebuild frontend (from cache)
         uses: docker/build-push-action@v5
         with:
@@ -316,52 +301,50 @@ jobs:
           tags: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=backend-v2
 
-      # ── Human-readable scans (no gate) — makes findings visible in the Actions log.
-      # format: sarif + output: file suppresses stdout entirely, so without these
-      # steps findings are only visible in the GitHub Security tab.
-      # Using trivy-action (not a raw shell step) so Trivy is guaranteed in PATH.
-      # ── Human-readable scans (no gate) — makes CVE findings visible in the Actions log.
-      # scanners: vuln — vulnerability findings only; secret scanning is a separate concern
-      # that requires its own allowlist and shouldn't be mixed into the CVE severity gate.
       - name: Trivy — log frontend findings (table, no gate)
         if: always()
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref:      ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          format:         table
-          scanners:       vuln
-          severity:       HIGH,CRITICAL
-          exit-code:      '0'
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '0'
           ignore-unfixed: true
-          trivyignores:   .trivyignore
+          trivyignores: .trivyignore
 
       - name: Trivy — log backend findings (table, no gate)
         if: always()
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          format:         table
-          scanners:       vuln
-          severity:       HIGH,CRITICAL
-          exit-code:      '0'
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '0'
           ignore-unfixed: true
-          trivyignores:   .trivyignore
+          trivyignores: .trivyignore
 
-      # ── CVE gate: vuln scanner only.
-      # Secret scanning belongs in a dedicated job with a .trivyignore-secrets
-      # allowlist — npm cache tarballs, test fixtures, and example configs
-      # produce high false-positive rates when mixed into the CVE severity gate.
       - name: Trivy — scan frontend
-        uses: aquasecurity/trivy-action@master
+        id: trivy_frontend
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref:      ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          format:         sarif
-          output:         trivy-frontend.sarif
-          scanners:       vuln
-          severity:       HIGH,CRITICAL
-          exit-code:      '1'
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          format: sarif
+          output: trivy-frontend.sarif
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          exit-code: '1'
           ignore-unfixed: true
-          trivyignores:   .trivyignore
+          trivyignores: .trivyignore
+
+      - name: Ensure frontend SARIF exists
+        if: always()
+        run: test -f trivy-frontend.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-frontend.sarif
 
       - name: Print frontend SARIF findings
         if: always()
@@ -372,9 +355,24 @@ jobs:
           if not os.path.exists(path):
               print("trivy-frontend.sarif not found")
               sys.exit(0)
+
           data = json.load(open(path))
-          results = [r.get("ruleId","?") for run in data.get("runs",[]) for r in run.get("results",[])]
-          print("Frontend findings:", results if results else "NONE — clean")
+          count = 0
+
+          for run in data.get("runs", []):
+              rules = {r.get("id"): r for r in run.get("tool", {}).get("driver", {}).get("rules", [])}
+              for result in run.get("results", []):
+                  rule_id = result.get("ruleId", "UNKNOWN")
+                  level = result.get("level", "unknown").upper()
+                  msg = result.get("message", {}).get("text", "").replace("\n", " ")
+                  rule = rules.get(rule_id, {})
+                  props = rule.get("properties", {})
+                  severity = props.get("security-severity", "n/a")
+                  print(f"{level}  {rule_id}  security-severity={severity}  {msg}")
+                  count += 1
+
+          if count == 0:
+              print("Frontend findings: NONE — clean")
           EOF
 
       - name: Upload frontend SARIF
@@ -382,20 +380,27 @@ jobs:
         if: always()
         with:
           sarif_file: trivy-frontend.sarif
-          category:   trivy-frontend
+          category: trivy-frontend
 
       - name: Trivy — scan backend
-        if: always()   # run even when frontend scan fails — both images must be scanned
-        uses: aquasecurity/trivy-action@master
+        id: trivy_backend
+        if: always()
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref:      ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          format:         sarif
-          output:         trivy-backend.sarif
-          scanners:       vuln
-          severity:       HIGH,CRITICAL
-          exit-code:      '1'
+          trivy-version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          format: sarif
+          output: trivy-backend.sarif
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          exit-code: '1'
           ignore-unfixed: true
-          trivyignores:   .trivyignore
+          trivyignores: .trivyignore
+
+      - name: Ensure backend SARIF exists
+        if: always()
+        run: test -f trivy-backend.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-backend.sarif
 
       - name: Print backend SARIF findings
         if: always()
@@ -406,9 +411,24 @@ jobs:
           if not os.path.exists(path):
               print("trivy-backend.sarif not found")
               sys.exit(0)
+
           data = json.load(open(path))
-          results = [r.get("ruleId","?") for run in data.get("runs",[]) for r in run.get("results",[])]
-          print("Backend findings:", results if results else "NONE — clean")
+          count = 0
+
+          for run in data.get("runs", []):
+              rules = {r.get("id"): r for r in run.get("tool", {}).get("driver", {}).get("rules", [])}
+              for result in run.get("results", []):
+                  rule_id = result.get("ruleId", "UNKNOWN")
+                  level = result.get("level", "unknown").upper()
+                  msg = result.get("message", {}).get("text", "").replace("\n", " ")
+                  rule = rules.get(rule_id, {})
+                  props = rule.get("properties", {})
+                  severity = props.get("security-severity", "n/a")
+                  print(f"{level}  {rule_id}  security-severity={severity}  {msg}")
+                  count += 1
+
+          if count == 0:
+              print("Backend findings: NONE — clean")
           EOF
 
       - name: Upload backend SARIF
@@ -416,7 +436,17 @@ jobs:
         if: always()
         with:
           sarif_file: trivy-backend.sarif
-          category:   trivy-backend
+          category: trivy-backend
+
+      - name: Fail if either Trivy scan failed
+        if: always()
+        run: |
+          echo "Frontend outcome: ${{ steps.trivy_frontend.outcome }}"
+          echo "Backend outcome:  ${{ steps.trivy_backend.outcome }}"
+          if [ "${{ steps.trivy_frontend.outcome }}" = "failure" ] || [ "${{ steps.trivy_backend.outcome }}" = "failure" ]; then
+            echo "::error::One or more Trivy scans failed"
+            exit 1
+          fi
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 5 — Push & Sign (Cosign keyless)
@@ -434,10 +464,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
-      id-token: write   # MUST be present for keyless Cosign
+      id-token: write
     outputs:
       frontend-digest: ${{ steps.push-frontend.outputs.digest }}
-      backend-digest:  ${{ steps.push-backend.outputs.digest }}
+      backend-digest: ${{ steps.push-backend.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -478,7 +508,6 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:latest
           cache-from: type=gha,scope=backend-v2
 
-      # Sign by digest (not tag) — tags are mutable; digests are not.
       - name: Sign frontend image
         run: |
           cosign sign --yes \
@@ -489,8 +518,6 @@ jobs:
           cosign sign --yes \
             ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
 
-      # Self-verify immediately — if this step fails the DAST job won't run,
-      # and you'll know the signing or identity binding broke.
       - name: Verify signatures
         run: |
           cosign verify \
@@ -537,37 +564,38 @@ jobs:
             up -d --wait --wait-timeout 60
         env:
           FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          BACKEND_IMAGE:  ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           POSTGRES_PASSWORD: ${{ secrets.DAST_DB_PASSWORD }}
-          DAST_JWT_SECRET:   ${{ secrets.DAST_JWT_SECRET }}
+          DAST_JWT_SECRET: ${{ secrets.DAST_JWT_SECRET }}
 
       - name: Health-check backend
         run: |
           for i in $(seq 1 30); do
             if curl -sf http://localhost:5001/health; then
-              echo "Backend ready after ${i}s"
-              break
+              echo "Backend ready after ${i} attempts"
+              exit 0
             fi
             sleep 2
           done
+          echo "::error::Backend did not become healthy in time"
+          exit 1
 
       - name: ZAP — Baseline scan (passive + spider)
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target:        'http://localhost:5001'
+          target: 'http://localhost:5001'
           rules_file_name: '.zap/rules.tsv'
-          cmd_options:   '-a'       # include ajax spider
-          fail_action:   true       # FAIL on WARN or higher (configurable in rules.tsv)
+          cmd_options: '-a'
+          fail_action: true
           artifact_name: zap-baseline-report
-        continue-on-error: true     # collect report even on failure
 
       - name: ZAP — API scan (active, against OpenAPI spec)
         uses: zaproxy/action-api-scan@v0.7.0
         with:
-          target:        'http://localhost:5001/api-docs.json'
-          format:        openapi
+          target: 'http://localhost:5001/api-docs.json'
+          format: openapi
           rules_file_name: '.zap/rules.tsv'
-          fail_action:   false      # informational on first run; flip to true once baseline is clean
+          fail_action: false
           artifact_name: zap-api-report
         continue-on-error: true
 
