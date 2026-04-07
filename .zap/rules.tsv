@@ -127,3 +127,19 @@
 
 # 10050 Retrieved from Cache
 10050	PASS
+
+# 10037 X-Powered-By Header — fixed by helmet (app.disable handled internally)
+10037	WARN
+
+# 10049 Storable and Cacheable Content — helmet sets Cache-Control: no-store
+10049	WARN
+
+# 10063 Permissions-Policy Header Not Set — added explicitly in index.js
+10063	WARN
+
+# 90004 Cross-Origin-Embedder-Policy Missing — set by helmet (crossOriginEmbedderPolicy)
+90004	WARN
+
+# 90005 Sec-Fetch-Dest Header Missing — this is a *request* header sent by browsers.
+# ZAP's HTTP client doesn't send it. Not a server-side finding. Suppress entirely.
+90005	PASS

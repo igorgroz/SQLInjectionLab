@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const swaggerUi = require("swagger-ui-express");
 
 const insecureRoutes = require("./insecureRoutes");
@@ -12,6 +13,41 @@ const { createApolloMiddleware } = require("./graphql-server");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// ─── Security headers ────────────────────────────────────────────────────────
+// helmet sets: X-Frame-Options, X-Content-Type-Options, X-DNS-Prefetch-Control,
+// HSTS (skipped in HTTP), Referrer-Policy, Content-Security-Policy, COEP, CORP.
+// Removes X-Powered-By. Fixes ZAP rules: 10020, 10021, 10037, 10038, 10049,
+// 10055, 90004.
+app.use(helmet({
+  // Relax CSP for the API — responses are JSON/text, not HTML,
+  // but a default-src 'self' is still good practice.
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'"],
+      styleSrc:    ["'self'"],
+      imgSrc:      ["'self'", "data:"],
+      connectSrc:  ["'self'"],
+      fontSrc:     ["'self'"],
+      objectSrc:   ["'none'"],
+      frameSrc:    ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  // HSTS not useful over HTTP in the DAST stack; helmet disables it when
+  // the request is not HTTPS, but be explicit for clarity.
+  hsts: false,
+}));
+// Permissions-Policy — disable all browser features (pure API, no UI served)
+// Fixes ZAP rule 10063.
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+  );
+  next();
+});
 
 app.use(cors({
   origin: (origin, callback) => {

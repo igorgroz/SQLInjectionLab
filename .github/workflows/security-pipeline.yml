@@ -20,6 +20,7 @@ permissions:
   security-events: write
   packages: write
   id-token: write
+  issues: write        # ZAP baseline action creates/updates issues with scan findings
 
 env:
   REGISTRY: ghcr.io
