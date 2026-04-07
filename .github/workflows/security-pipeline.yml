@@ -474,6 +474,9 @@ jobs:
           echo "::error::Backend did not become healthy in time"
           exit 1
 
+      - name: Make workspace writable for ZAP container
+        run: chmod a+w ${{ github.workspace }}
+
       - name: ZAP — Baseline scan (passive + spider)
         uses: zaproxy/action-baseline@v0.12.0
         with:
