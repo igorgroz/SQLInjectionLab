@@ -142,4 +142,6 @@
 
 # 90005 Sec-Fetch-Dest Header Missing — this is a *request* header sent by browsers.
 # ZAP's HTTP client doesn't send it. Not a server-side finding. Suppress entirely.
-90005	PASS
+# Use IGNORE (not PASS) — baseline script treats PASS as "known baseline item"
+# whereas IGNORE actively suppresses the alert regardless of baseline state.
+90005	IGNORE

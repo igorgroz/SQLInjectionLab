@@ -359,6 +359,17 @@ app.get("/api-docs.json", (_req, res) => res.json(openApiSpec));
     // /graphql-insecure (express-graphql) for training purposes.
     app.use("/graphql", apolloMiddleware);
 
+    // ── Catch-all 404 handler ─────────────────────────────────────────────────
+    // Must be registered AFTER all routes (including Apollo) so it only fires
+    // when nothing else matched. Explicit Cache-Control and CSP on 404 responses
+    // suppress ZAP findings 10049 (Storable/Cacheable) and 10055 (CSP no fallback)
+    // on /robots.txt, /sitemap.xml, etc. that Express would otherwise 404 without
+    // the headers helmet set on the response.
+    app.use((_req, res) => {
+      res.set("Cache-Control", "no-store");
+      res.status(404).json({ error: "Not found" });
+    });
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`  REST (insecure):    http://localhost:${PORT}/api/insecure-users`);

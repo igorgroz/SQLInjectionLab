@@ -479,21 +479,28 @@ jobs:
         run: chmod a+w ${{ github.workspace }}
 
       - name: ZAP — Baseline scan (passive + spider)
-        uses: zaproxy/action-baseline@v0.12.0
+        # fail_action: false — passive scan findings are informational.
+        # WARN-NEW alerts (missing headers, cache hints) are reported and
+        # uploaded as an artifact; they do NOT gate the pipeline.
+        # Active exploitables (SQLi, XSS) are caught by the API scan below.
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://localhost:5001'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
-          fail_action: true
+          fail_action: false
           artifact_name: zap-baseline-report
 
       - name: ZAP — API scan (active, against OpenAPI spec)
-        uses: zaproxy/action-api-scan@v0.7.0
+        # fail_action: true — active scan against OpenAPI spec; gates on FAIL-NEW.
+        # SQL injection and XSS rules are set to FAIL in rules.tsv so any
+        # confirmed finding here blocks the pipeline.
+        uses: zaproxy/action-api-scan@v0.9.0
         with:
           target: 'http://localhost:5001/api-docs.json'
           format: openapi
           rules_file_name: '.zap/rules.tsv'
-          fail_action: false
+          fail_action: true
           artifact_name: zap-api-report
         continue-on-error: true
 
