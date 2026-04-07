@@ -17,9 +17,9 @@ on:
 
 permissions:
   contents: read
-  security-events: write  # Upload SARIF to GitHub Security tab
-  packages: write         # Push to ghcr.io
-  id-token: write         # Cosign keyless signing via OIDC
+  security-events: write
+  packages: write
+  id-token: write
 
 env:
   REGISTRY: ghcr.io
@@ -33,10 +33,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 1 — SAST: Semgrep
-# Runs on every PR and every push to main.
-# Rules cover JavaScript, React, Node.js, OWASP Top 10, SQL injection.
-# Uploads SARIF so findings appear in the GitHub Security → Code Scanning tab.
-# Fails the pipeline on ERROR-severity findings.
 # ══════════════════════════════════════════════════════════════════
   sast:
     name: SAST (Semgrep)
@@ -60,9 +56,12 @@ jobs:
             --error \
             .
 
-      - name: Ensure SARIF exists (semgrep writes it before exit; guard for edge cases)
+      - name: Ensure SARIF exists
         if: always()
-        run: test -f semgrep.sarif || echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
+        run: |
+          if [ ! -s semgrep.sarif ]; then
+            echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
+          fi
 
       - name: Annotate findings in Actions log
         if: always()
@@ -103,9 +102,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2a — SCA: Backend (npm audit)
-# Fails on HIGH or CRITICAL findings NOT in audit-exceptions.json.
-# Exceptions must have documented justification and a review date.
-# Produces JSON artifact for audit trail.
 # ══════════════════════════════════════════════════════════════════
   sca-backend:
     name: SCA — Backend (npm audit)
@@ -169,7 +165,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2b — SCA: Frontend (npm audit)
-# Audits PRODUCTION dependencies only (--omit=dev).
 # ══════════════════════════════════════════════════════════════════
   sca-frontend:
     name: SCA — Frontend (npm audit)
@@ -219,9 +214,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 3 — Build Docker images
-# Requires SAST + both SCA jobs to pass first.
-# Uses GitHub Actions cache (type=gha) to speed up layer reuse.
-# Images are loaded locally (no push yet); Trivy scans them next.
 # ══════════════════════════════════════════════════════════════════
   build:
     name: Build Docker Images
@@ -265,10 +257,10 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 4 — Container scan: Trivy
-# Scans both images for OS and language-level CVEs.
-# Gates on HIGH and CRITICAL with a fix available (ignore-unfixed: true).
-# Uploads SARIF to GitHub Security → Code Scanning.
-# .trivyignore at repo root lets you suppress accepted-risk CVEs.
+# Diagnostic mode:
+# - human-readable table output
+# - no SARIF upload for now
+# - fail gate still active
 # ══════════════════════════════════════════════════════════════════
   container-scan:
     name: Container Scan (Trivy)
@@ -327,116 +319,32 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Trivy — scan frontend
+      - name: Trivy — scan frontend (gate)
         id: trivy_frontend
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          format: sarif
-          output: trivy-frontend.sarif
+          format: table
           scanners: vuln
           severity: HIGH,CRITICAL
-          limit-severities-for-sarif: true
           exit-code: '1'
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Ensure frontend SARIF exists
-        if: always()
-        run: test -f trivy-frontend.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-frontend.sarif
-
-      - name: Print frontend SARIF findings
-        if: always()
-        run: |
-          python3 - <<'EOF'
-          import json, os, sys
-          path = "trivy-frontend.sarif"
-          if not os.path.exists(path):
-              print("trivy-frontend.sarif not found")
-              sys.exit(0)
-
-          data = json.load(open(path))
-          count = 0
-
-          for run in data.get("runs", []):
-              rules = {r.get("id"): r for r in run.get("tool", {}).get("driver", {}).get("rules", [])}
-              for result in run.get("results", []):
-                  rule_id = result.get("ruleId", "UNKNOWN")
-                  level = result.get("level", "unknown").upper()
-                  msg = result.get("message", {}).get("text", "").replace("\n", " ")
-                  rule = rules.get(rule_id, {})
-                  props = rule.get("properties", {})
-                  severity = props.get("security-severity", "n/a")
-                  print(f"{level}  {rule_id}  security-severity={severity}  {msg}")
-                  count += 1
-
-          if count == 0:
-              print("Frontend findings: NONE — clean")
-          EOF
-
-      - name: Upload frontend SARIF
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: trivy-frontend.sarif
-          category: trivy-frontend
-
-      - name: Trivy — scan backend
+      - name: Trivy — scan backend (gate)
         id: trivy_backend
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          format: sarif
-          output: trivy-backend.sarif
+          format: table
           scanners: vuln
           severity: HIGH,CRITICAL
-          limit-severities-for-sarif: true
           exit-code: '1'
           ignore-unfixed: true
           trivyignores: .trivyignore
-
-      - name: Ensure backend SARIF exists
-        if: always()
-        run: test -f trivy-backend.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-backend.sarif
-
-      - name: Print backend SARIF findings
-        if: always()
-        run: |
-          python3 - <<'EOF'
-          import json, os, sys
-          path = "trivy-backend.sarif"
-          if not os.path.exists(path):
-              print("trivy-backend.sarif not found")
-              sys.exit(0)
-
-          data = json.load(open(path))
-          count = 0
-
-          for run in data.get("runs", []):
-              rules = {r.get("id"): r for r in run.get("tool", {}).get("driver", {}).get("rules", [])}
-              for result in run.get("results", []):
-                  rule_id = result.get("ruleId", "UNKNOWN")
-                  level = result.get("level", "unknown").upper()
-                  msg = result.get("message", {}).get("text", "").replace("\n", " ")
-                  rule = rules.get(rule_id, {})
-                  props = rule.get("properties", {})
-                  severity = props.get("security-severity", "n/a")
-                  print(f"{level}  {rule_id}  security-severity={severity}  {msg}")
-                  count += 1
-
-          if count == 0:
-              print("Backend findings: NONE — clean")
-          EOF
-
-      - name: Upload backend SARIF
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: trivy-backend.sarif
-          category: trivy-backend
 
       - name: Fail if either Trivy scan failed
         if: always()
@@ -450,12 +358,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 5 — Push & Sign (Cosign keyless)
-# Only runs on push to main/master — not on PRs.
-# Pushes both images to ghcr.io, then signs them using Cosign
-# keyless mode (GitHub OIDC → Sigstore Fulcio CA, logged to Rekor).
-# No private key to manage — provenance is cryptographically bound
-# to this workflow run's OIDC identity.
-# Verifies own signatures before the DAST job proceeds.
 # ══════════════════════════════════════════════════════════════════
   push-and-sign:
     name: Push & Sign (Cosign keyless)
@@ -532,14 +434,6 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 6 — DAST: OWASP ZAP
-# Only on push to main (after images are signed).
-# Pulls signed images from GHCR, starts the stack via
-# docker-compose.dast.yml (which disables Entra ID auth and uses
-# a pre-issued test JWT so ZAP can reach API endpoints).
-# Runs two scans:
-#   baseline — spider + passive analysis of the app surface
-#   api-scan — active scan against the OpenAPI/Swagger spec
-# Both produce HTML/JSON reports uploaded as artifacts.
 # ══════════════════════════════════════════════════════════════════
   dast:
     name: DAST (OWASP ZAP)
