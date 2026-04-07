@@ -12,7 +12,8 @@ __pycache__/
 .DS_Store
 
 infra/OpenVPN/*.dmg
-*.dmgbackend/.env
+*.dmg
+backend/.env
 SQLInjproject.zip
 *.pem
 *.zip

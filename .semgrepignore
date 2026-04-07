@@ -15,7 +15,6 @@
 # keeps the SAST gate meaningful for the rest of the codebase.
 backend/insecureRoutes.js
 backend/insecureGraphQL.js
-backend/norestapi-index.js
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
@@ -24,3 +23,9 @@ backend/node_modules/
 
 # ── Build output ──────────────────────────────────────────────────────────────
 frontend/build/
+
+# ── Archived legacy files (old AWS / Helm / CodeBuild deployment path) ────────
+# Archive/ holds infra/, DevSecOps/, buildspec.yml and other artefacts from the
+# earlier AWS/EKS approach. None of it runs in the current stack. Excluding to
+# prevent false positives and noise in SAST results.
+Archive/
