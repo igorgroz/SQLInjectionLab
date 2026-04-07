@@ -29,6 +29,11 @@ services:
     environment:
       # Switch auth middleware to local JWT validation (bypass Entra ID JWKS)
       AUTH_MODE:          dast
+      # authJwt.js expects DAST_JWT_SECRET in AUTH_MODE=dast, and the
+      # pre-ZAP route smoke step also reads this variable from the container.
+      DAST_JWT_SECRET:    ${DAST_JWT_SECRET}
+      # Keep JWT_SECRET too for any code paths that still reference the older
+      # variable name during the transition.
       JWT_SECRET:         ${DAST_JWT_SECRET}
 
       # Entra ID vars still need to be present (avoid startup crash on env checks)
