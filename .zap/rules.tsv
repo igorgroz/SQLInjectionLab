@@ -1,147 +1,150 @@
 # ZAP Alert Filter Rules
 # ─────────────────────────────────────────────────────────────────────────────
-# Format:  alertId  action  [parameter  [evidence  [url]]]
-# Actions: PASS (ignore), WARN (log only, don't fail), FAIL (fail the scan)
+# Format (3 fields, tab-separated — required by zap-baseline.py -c):
+#   alertId <TAB> action <TAB> url-regex
+#
+# url-regex: .* matches all URLs; use a specific pattern to scope the rule.
+# Actions:   FAIL (fail scan), WARN (log, don't fail), PASS (suppress)
+#            IGNORE (actively suppress regardless of baseline state)
+#
+# Strategy:
+#   FAIL  — genuine exploitable risk on this stack
+#   WARN  — needs review; likely informational or false positive in lab context
+#   PASS  — intentionally not addressed at this phase
+#   IGNORE — ZAP client/scanner noise, not a server-side finding
 #
 # Reference: https://www.zaproxy.org/docs/desktop/addons/alert-filters/
-#
-# Strategy for this project:
-#   • FAIL on alerts that represent genuine exploitable risk on this stack
-#   • WARN on alerts that need review but are likely false positives in this
-#     lab context (no production CSP, internal-only ZAP scan, etc.)
-#   • PASS on alerts that are intentionally not addressed at this phase
-#
-# Run `docker run zaproxy/zap-stable zap.sh -alert-list` for the full list.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Injections (FAIL — these are the point of the lab) ──────────────────────
 # 90022 Application Error Disclosure
-90022	WARN
+90022	WARN	.*
 
 # 40012 Cross Site Scripting (Reflected)
-40012	FAIL
+40012	FAIL	.*
 
 # 40014 Cross Site Scripting (Persistent)
-40014	FAIL
+40014	FAIL	.*
 
 # 40016 Cross Site Scripting (Persistent) - Prime
-40016	FAIL
+40016	FAIL	.*
 
 # 40017 Cross Site Scripting (Persistent) - Spider
-40017	FAIL
+40017	FAIL	.*
 
 # 40018 SQL Injection
-40018	FAIL
+40018	FAIL	.*
 
 # 40019 SQL Injection - MySQL
-40019	FAIL
+40019	FAIL	.*
 
 # 40020 SQL Injection - Hypersonic SQL
-40020	FAIL
+40020	FAIL	.*
 
 # 40021 SQL Injection - Oracle
-40021	FAIL
+40021	FAIL	.*
 
 # 40022 SQL Injection - PostgreSQL
-40022	FAIL
+40022	FAIL	.*
 
 # 40024 SQL Injection - SQLite
-40024	FAIL
+40024	FAIL	.*
 
 # ── Authentication / Session ─────────────────────────────────────────────────
 # 10010 Cookie No HttpOnly Flag
-10010	FAIL
+10010	FAIL	.*
 
 # 10011 Cookie Without Secure Flag
-10011	FAIL
+10011	FAIL	.*
 
 # 10054 Cookie without SameSite Attribute
-10054	WARN
+10054	WARN	.*
 
 # 10012 Password Autocomplete in Browser
-10012	WARN
+10012	WARN	.*
 
 # 10098 Cross-Domain Misconfiguration (CORS)
-10098	FAIL
+10098	FAIL	.*
 
 # 10108 Reverse Tabnabbing
-10108	WARN
+10108	WARN	.*
 
 # ── Transport Security ───────────────────────────────────────────────────────
 # 10017 Cross-Domain JavaScript Source File Inclusion
-10017	WARN
+10017	WARN	.*
 
 # 10020 X-Frame-Options Header Not Set
-10020	WARN
+10020	WARN	.*
 
 # 10021 X-Content-Type-Options Header Missing
-10021	WARN
+10021	WARN	.*
 
 # 10035 Strict-Transport-Security Header Not Set
 # PASS in local/CI context — no TLS termination in the DAST stack
-10035	PASS
+10035	PASS	.*
 
 # 10036 HTTP Server Response Header
-10036	WARN
+10036	WARN	.*
 
 # 10038 Content Security Policy (CSP) Header Not Set
-# WARN only — CSP not yet configured in this phase
-10038	WARN
+# WARN only — CSP set by helmet; may still fire on 404 responses
+10038	WARN	.*
 
-# 10055 CSP — Wildcard Directive
-10055	WARN
+# 10055 CSP — Failure to Define Directive with No Fallback
+10055	WARN	.*
 
 # ── Information Disclosure ───────────────────────────────────────────────────
 # 10023 Information Disclosure - Debug Error Messages
-10023	FAIL
+10023	FAIL	.*
 
 # 10024 Information Disclosure - Sensitive Information in URL
-10024	WARN
+10024	WARN	.*
 
 # 10025 Information Disclosure - Sensitive Information in HTTP Referrer Header
-10025	WARN
+10025	WARN	.*
 
 # 10027 Information Disclosure - Suspicious Comments
-10027	PASS    # Source maps / build comments in dev build
+# Source maps / build comments in dev build
+10027	PASS	.*
 
 # 10040 Secure Pages Include Mixed Content
-10040	WARN
+10040	WARN	.*
 
 # ── API / Headers ────────────────────────────────────────────────────────────
 # 90003 Sub Resource Integrity Attribute Missing
-90003	WARN
+90003	WARN	.*
 
 # 10202 Absence of Anti-CSRF Tokens
 # PASS — API uses JWT bearer auth (stateless), no session cookies, CSRF N/A
-10202	PASS
+10202	PASS	.*
 
 # 10045 Source Code Disclosure — /WEB-INF folder
-10045	FAIL
+10045	FAIL	.*
 
 # 10106 HTTP Only Site
-10106	PASS    # DAST stack intentionally uses HTTP
+# PASS — DAST stack intentionally uses HTTP
+10106	PASS	.*
 
-# ── Low-signal false positives in this lab context ──────────────────────────
+# ── Low-signal / environmental noise ────────────────────────────────────────
 # 10109 Modern Web Application
-10109	PASS
+10109	PASS	.*
 
 # 10050 Retrieved from Cache
-10050	PASS
+10050	PASS	.*
 
-# 10037 X-Powered-By Header — fixed by helmet (app.disable handled internally)
-10037	WARN
+# 10037 X-Powered-By Header — removed by helmet
+10037	WARN	.*
 
-# 10049 Storable and Cacheable Content — helmet sets Cache-Control: no-store
-10049	WARN
+# 10049 Storable and Cacheable Content — Cache-Control set by 404 handler
+10049	WARN	.*
 
-# 10063 Permissions-Policy Header Not Set — added explicitly in index.js
-10063	WARN
+# 10063 Permissions-Policy Header Not Set — set explicitly in index.js
+10063	WARN	.*
 
-# 90004 Cross-Origin-Embedder-Policy Missing — set by helmet (crossOriginEmbedderPolicy)
-90004	WARN
+# 90004 Cross-Origin-Embedder-Policy Missing — set by helmet
+90004	WARN	.*
 
-# 90005 Sec-Fetch-Dest Header Missing — this is a *request* header sent by browsers.
-# ZAP's HTTP client doesn't send it. Not a server-side finding. Suppress entirely.
-# Use IGNORE (not PASS) — baseline script treats PASS as "known baseline item"
-# whereas IGNORE actively suppresses the alert regardless of baseline state.
-90005	IGNORE
+# 90005 Sec-Fetch-Dest Header Missing
+# This is a request header sent by browsers; ZAP's HTTP client doesn't send it.
+# Not a server-side finding — suppress entirely.
+90005	IGNORE	.*
