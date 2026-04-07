@@ -15,6 +15,8 @@ services:
 
   backend:
     container_name: sqlinj-backend
+    image: ghcr.io/igorgroz/sqlinj-backend:latest
+    platform: linux/amd64
     build:
       context: ./backend
     restart: unless-stopped
@@ -28,11 +30,13 @@ services:
 
   frontend:
     container_name: sqlinj-frontend
+    image: ghcr.io/igorgroz/sqlinj-frontend:latest
+    platform: linux/amd64
     build:
       context: ./frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:8080"   # nginx-unprivileged listens on 8080 (non-privileged port)
     depends_on:
       - backend
 
