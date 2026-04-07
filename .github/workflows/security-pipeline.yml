@@ -480,6 +480,82 @@ jobs:
           echo "::error::Backend did not become healthy in time"
           exit 1
 
+      - name: Exercise documented REST routes before ZAP
+        if: always()
+        run: |
+          mkdir -p artifacts/zap-api
+
+          DAST_TOKEN="$(
+            docker exec sqlinj-backend node -e '
+              const jwt = require("jsonwebtoken");
+              process.stdout.write(
+                jwt.sign(
+                  { sub: "dast-smoke", scp: "user.read user.write" },
+                  process.env.DAST_JWT_SECRET,
+                  { algorithm: "HS256", expiresIn: "1h" }
+                )
+              );
+            '
+          )"
+
+          hit() {
+            local label="$1"
+            shift
+            {
+              echo "===== ${label} ====="
+              echo "Command: curl $*"
+              curl -sS -i "$@"
+              echo
+              echo
+            } >> artifacts/zap-api/route-smoke.txt
+          }
+
+          hit "GET /health" \
+            http://localhost:5001/health
+
+          hit "GET /api/insecure-users" \
+            http://localhost:5001/api/insecure-users
+
+          hit "GET /api/insecure-users/{userid}" \
+            http://localhost:5001/api/insecure-users/1
+
+          hit "GET /api/insecure-users/{userid}/clothes" \
+            http://localhost:5001/api/insecure-users/1/clothes
+
+          hit "POST /api/insecure-users/clothes" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":"1","clothid":"2"}' \
+            http://localhost:5001/api/insecure-users/clothes
+
+          hit "POST /api/insecure-users/remove-cloth" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":"1","clothid":"2"}' \
+            http://localhost:5001/api/insecure-users/remove-cloth
+
+          hit "GET /api/safe-users" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            http://localhost:5001/api/safe-users
+
+          hit "GET /api/safe-users/{userid}" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            http://localhost:5001/api/safe-users/1
+
+          hit "GET /api/safe-users/{userid}/clothes" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            http://localhost:5001/api/safe-users/1/clothes
+
+          hit "POST /api/safe-users/clothes" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":1,"clothid":2}' \
+            http://localhost:5001/api/safe-users/clothes
+
+          hit "POST /api/safe-users/remove-cloth" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":1,"clothid":2}' \
+            http://localhost:5001/api/safe-users/remove-cloth
+
       - name: Make workspace writable for ZAP container
         run: chmod a+w ${{ github.workspace }}
 
