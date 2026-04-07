@@ -9,12 +9,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Intentionally vulnerable files ───────────────────────────────────────────
-# These files contain deliberate SQL injection and other vulnerabilities
-# for training and CI/CD scanner validation purposes.
-# Semgrep findings in these files are expected and known — suppressing them
-# keeps the SAST gate meaningful for the rest of the codebase.
-backend/insecureRoutes.js
-backend/insecureGraphQL.js
+# insecureRoutes.js and insecureGraphQL.js contain deliberate SQL injection
+# vulnerabilities. They are intentionally included in scanning so Semgrep
+# confirms it can detect the vulnerability patterns. The pipeline is expected
+# to FAIL on these findings — that is the correct and desired behaviour.
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/

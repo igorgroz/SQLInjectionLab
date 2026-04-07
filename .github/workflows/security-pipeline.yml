@@ -492,9 +492,11 @@ jobs:
           artifact_name: zap-baseline-report
 
       - name: ZAP — API scan (active, against OpenAPI spec)
-        # fail_action: true — active scan against OpenAPI spec; gates on FAIL-NEW.
-        # SQL injection and XSS rules are set to FAIL in rules.tsv so any
-        # confirmed finding here blocks the pipeline.
+        # fail_action: true — ZAP exits with code 2 on confirmed FAIL-level alerts.
+        # continue-on-error: true keeps the step from aborting the job early so
+        # the artifact upload and tear-down steps always run. The explicit gate
+        # step below is what actually fails the pipeline on SQLi/XSS findings.
+        id: zap_api
         uses: zaproxy/action-api-scan@v0.9.0
         with:
           target: 'http://localhost:5001/api-docs.json'
@@ -503,6 +505,17 @@ jobs:
           fail_action: true
           artifact_name: zap-api-report
         continue-on-error: true
+
+      - name: Gate — fail pipeline on ZAP FAIL-level findings
+        # outcome is "failure" when ZAP exited non-zero (confirmed FAIL alerts).
+        # Separated from the scan step so artifacts still upload on failure.
+        if: always()
+        run: |
+          if [ "${{ steps.zap_api.outcome }}" = "failure" ]; then
+            echo "::error::ZAP API scan found FAIL-level alerts (SQL injection / XSS confirmed)"
+            exit 1
+          fi
+          echo "ZAP API scan passed — no FAIL-level alerts detected"
 
       - name: Tear down stack
         if: always()

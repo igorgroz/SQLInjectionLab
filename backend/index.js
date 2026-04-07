@@ -196,8 +196,11 @@ const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  userid:  { type: "integer" },
-                  clothid: { type: "integer" },
+                  // type: "string" (not "integer") so ZAP fuzzes these fields
+                  // with SQL injection payloads. The backend does no type coercion
+                  // — the raw value is interpolated directly into the SQL query.
+                  userid:  { type: "string" },
+                  clothid: { type: "string" },
                 },
               },
             },
@@ -221,8 +224,11 @@ const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  userid:  { type: "integer" },
-                  clothid: { type: "integer" },
+                  // type: "string" (not "integer") so ZAP fuzzes these fields
+                  // with SQL injection payloads. The backend does no type coercion
+                  // — the raw value is interpolated directly into the SQL query.
+                  userid:  { type: "string" },
+                  clothid: { type: "string" },
                 },
               },
             },
