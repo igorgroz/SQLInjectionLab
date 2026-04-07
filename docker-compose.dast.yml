@@ -52,9 +52,10 @@ services:
 
   frontend:
     # Pull the image just pushed and signed
+    # No ports override here — base docker-compose.yml already has 3000:3000.
+    # Adding 3000:80 here would merge into a duplicate host-port bind and fail.
+    # ZAP scans the backend only (localhost:5001), so frontend port is irrelevant.
     image: ${FRONTEND_IMAGE:-sqlinj-frontend:latest}
-    ports:
-      - "3000:80"
 
   db:
     # Ephemeral — no named volume; torn down with docker compose down -v
