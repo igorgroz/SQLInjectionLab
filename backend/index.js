@@ -162,7 +162,19 @@ const openApiSpec = {
         operationId: "insecureGetUser",
         tags: ["Insecure"],
         parameters: [
-          { name: "userid", in: "path", required: true, schema: { type: "string" } },
+          {
+            name: "userid",
+            in: "path",
+            required: true,
+            description:
+              "Raw user-controlled value interpolated directly into SQL. " +
+              "Documented as a string on purpose so DAST tools will fuzz it.",
+            schema: {
+              type: "string",
+              example: "1",
+            },
+            example: "1",
+          },
         ],
         responses: {
           200: { description: "User object" },
@@ -176,7 +188,19 @@ const openApiSpec = {
         operationId: "insecureGetUserClothes",
         tags: ["Insecure"],
         parameters: [
-          { name: "userid", in: "path", required: true, schema: { type: "string" } },
+          {
+            name: "userid",
+            in: "path",
+            required: true,
+            description:
+              "Raw user-controlled value interpolated directly into SQL. " +
+              "Documented as a string on purpose so DAST tools will fuzz it.",
+            schema: {
+              type: "string",
+              example: "1",
+            },
+            example: "1",
+          },
         ],
         responses: {
           200: { description: "List of clothing" },
@@ -195,12 +219,17 @@ const openApiSpec = {
             "application/json": {
               schema: {
                 type: "object",
+                required: ["userid", "clothid"],
                 properties: {
                   // type: "string" (not "integer") so ZAP fuzzes these fields
                   // with SQL injection payloads. The backend does no type coercion
                   // — the raw value is interpolated directly into the SQL query.
-                  userid:  { type: "string" },
-                  clothid: { type: "string" },
+                  userid:  { type: "string", example: "1" },
+                  clothid: { type: "string", example: "2" },
+                },
+                example: {
+                  userid: "1",
+                  clothid: "2",
                 },
               },
             },
@@ -223,12 +252,17 @@ const openApiSpec = {
             "application/json": {
               schema: {
                 type: "object",
+                required: ["userid", "clothid"],
                 properties: {
                   // type: "string" (not "integer") so ZAP fuzzes these fields
                   // with SQL injection payloads. The backend does no type coercion
                   // — the raw value is interpolated directly into the SQL query.
-                  userid:  { type: "string" },
-                  clothid: { type: "string" },
+                  userid:  { type: "string", example: "1" },
+                  clothid: { type: "string", example: "2" },
+                },
+                example: {
+                  userid: "1",
+                  clothid: "2",
                 },
               },
             },
