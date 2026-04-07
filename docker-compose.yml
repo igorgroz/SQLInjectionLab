@@ -19,7 +19,8 @@ services:
       context: ./backend
     restart: unless-stopped
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false          # CI doesn't have this file; vars injected via docker-compose.dast.yml + GitHub Secrets
     ports:
       - "5001:5001"
     depends_on:
