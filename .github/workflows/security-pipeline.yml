@@ -443,6 +443,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       zap_outcome: ${{ steps.zap_api.outcome }}
+      zap_report_exists: ${{ steps.collect_zap_evidence.outputs.zap_report_exists }}
+      zap_scan_status: ${{ steps.collect_zap_evidence.outputs.zap_scan_status }}
     steps:
       - uses: actions/checkout@v4
 
@@ -508,14 +510,78 @@ jobs:
           artifact_name: zap-api-report
         continue-on-error: true
 
+      - name: Collect ZAP API evidence
+        id: collect_zap_evidence
+        if: always()
+        run: |
+          mkdir -p artifacts/zap-api
+
+          # Preserve whatever the ZAP action managed to produce before succeeding
+          # or failing. The scan scripts commonly emit these filenames.
+          shopt -s nullglob
+          report_files=(
+            report_html.html
+            report_json.json
+            report_md.md
+            zap-report.html
+            zap-report.json
+            zap-report.md
+          )
+
+          report_found=false
+          for file in "${report_files[@]}"; do
+            if [ -f "$file" ]; then
+              cp "$file" artifacts/zap-api/
+              report_found=true
+            fi
+          done
+
+          curl -sS -D artifacts/zap-api/api-docs.headers \
+            http://localhost:5001/api-docs.json \
+            -o artifacts/zap-api/api-docs.json || true
+
+          docker compose -f docker-compose.yml -f docker-compose.dast.yml ps \
+            > artifacts/zap-api/docker-compose-ps.txt || true
+
+          docker compose -f docker-compose.yml -f docker-compose.dast.yml logs backend \
+            > artifacts/zap-api/backend.log 2>&1 || true
+
+          docker compose -f docker-compose.yml -f docker-compose.dast.yml logs frontend \
+            > artifacts/zap-api/frontend.log 2>&1 || true
+
+          docker compose -f docker-compose.yml -f docker-compose.dast.yml logs db \
+            > artifacts/zap-api/db.log 2>&1 || true
+
+          if [ "${{ steps.zap_api.outcome }}" = "success" ]; then
+            scan_status=clean
+          elif [ "$report_found" = "true" ]; then
+            scan_status=findings
+          else
+            scan_status=scan-error
+          fi
+
+          echo "zap_report_exists=$report_found" >> "$GITHUB_OUTPUT"
+          echo "zap_scan_status=$scan_status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ZAP API evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-api-evidence
+          path: artifacts/zap-api
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Summarise ZAP findings for reviewer
         # Annotates the job log with the ZAP outcome so the reviewer has
         # context before approving or rejecting in the dast-gate job below.
         # Does NOT fail the pipeline here — the manual gate job does that.
         if: always()
         run: |
-          if [ "${{ steps.zap_api.outcome }}" = "failure" ]; then
-            echo "::warning::ZAP API scan found FAIL-level alerts (SQL injection / XSS). Review zap-api-report artifact before approving."
+          if [ "${{ steps.collect_zap_evidence.outputs.zap_scan_status }}" = "findings" ]; then
+            echo "::warning::ZAP API scan found FAIL-level alerts (SQL injection / XSS). Review the zap-api-evidence artifact before approving."
+          elif [ "${{ steps.collect_zap_evidence.outputs.zap_scan_status }}" = "scan-error" ]; then
+            echo "::warning::ZAP API scan failed before it could publish a full report. Review the zap-api-evidence artifact for diagnostics before approving."
           else
             echo "ZAP API scan passed — no FAIL-level alerts detected"
           fi
@@ -534,7 +600,7 @@ jobs:
     runs-on: ubuntu-latest
     # ── Environment protection rule ───────────────────────────────
     # Pauses here and notifies required reviewers. The reviewer should:
-    #   1. Download the zap-api-report artifact from the DAST job
+    #   1. Download the zap-api-evidence artifact from the DAST job
     #   2. Review the findings
     #   3. Approve to continue or reject to block the pipeline
     #
@@ -545,11 +611,22 @@ jobs:
       - name: Report ZAP outcome to reviewer
         run: |
           ZAP_OUTCOME="${{ needs.dast.outputs.zap_outcome }}"
-          if [ "$ZAP_OUTCOME" = "failure" ]; then
+          ZAP_SCAN_STATUS="${{ needs.dast.outputs.zap_scan_status }}"
+          ZAP_REPORT_EXISTS="${{ needs.dast.outputs.zap_report_exists }}"
+
+          if [ "$ZAP_SCAN_STATUS" = "findings" ]; then
             echo "::warning::ZAP found FAIL-level alerts. You are approving with known findings."
-            echo "Review the zap-api-report artifact before approving."
-          else
+            echo "Review the zap-api-evidence artifact before approving."
+            if [ "$ZAP_REPORT_EXISTS" = "true" ]; then
+              echo "The artifact includes the generated ZAP API report files."
+            fi
+          elif [ "$ZAP_SCAN_STATUS" = "scan-error" ]; then
+            echo "::warning::ZAP API scan failed before producing a full report."
+            echo "Review the zap-api-evidence artifact for docker logs, compose status, and api-docs capture before approving."
+          elif [ "$ZAP_OUTCOME" = "success" ]; then
             echo "ZAP scan passed — approving a clean build."
+          else
+            echo "::warning::ZAP completed with an unexpected status. Review zap-api-evidence before approving."
           fi
 
       - name: Approved
