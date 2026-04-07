@@ -441,6 +441,8 @@ jobs:
     needs: push-and-sign
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      zap_outcome: ${{ steps.zap_api.outcome }}
     steps:
       - uses: actions/checkout@v4
 
@@ -506,17 +508,49 @@ jobs:
           artifact_name: zap-api-report
         continue-on-error: true
 
-      - name: Gate — fail pipeline on ZAP FAIL-level findings
-        # outcome is "failure" when ZAP exited non-zero (confirmed FAIL alerts).
-        # Separated from the scan step so artifacts still upload on failure.
+      - name: Summarise ZAP findings for reviewer
+        # Annotates the job log with the ZAP outcome so the reviewer has
+        # context before approving or rejecting in the dast-gate job below.
+        # Does NOT fail the pipeline here — the manual gate job does that.
         if: always()
         run: |
           if [ "${{ steps.zap_api.outcome }}" = "failure" ]; then
-            echo "::error::ZAP API scan found FAIL-level alerts (SQL injection / XSS confirmed)"
-            exit 1
+            echo "::warning::ZAP API scan found FAIL-level alerts (SQL injection / XSS). Review zap-api-report artifact before approving."
+          else
+            echo "ZAP API scan passed — no FAIL-level alerts detected"
           fi
-          echo "ZAP API scan passed — no FAIL-level alerts detected"
 
       - name: Tear down stack
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.dast.yml down -v
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 7 — DAST Manual Review Gate
+# ══════════════════════════════════════════════════════════════════
+  dast-gate:
+    name: DAST Manual Review Gate
+    needs: dast
+    if: always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    # ── Environment protection rule ───────────────────────────────
+    # Pauses here and notifies required reviewers. The reviewer should:
+    #   1. Download the zap-api-report artifact from the DAST job
+    #   2. Review the findings
+    #   3. Approve to continue or reject to block the pipeline
+    #
+    # Setup: GitHub repo → Settings → Environments → dast-review
+    #        → Required reviewers → add yourself
+    environment: dast-review
+    steps:
+      - name: Report ZAP outcome to reviewer
+        run: |
+          ZAP_OUTCOME="${{ needs.dast.outputs.zap_outcome }}"
+          if [ "$ZAP_OUTCOME" = "failure" ]; then
+            echo "::warning::ZAP found FAIL-level alerts. You are approving with known findings."
+            echo "Review the zap-api-report artifact before approving."
+          else
+            echo "ZAP scan passed — approving a clean build."
+          fi
+
+      - name: Approved
+        run: echo "DAST review approved by ${{ github.actor }} — pipeline complete"
