@@ -445,6 +445,7 @@ jobs:
       zap_outcome: ${{ steps.zap_api.outcome }}
       zap_report_exists: ${{ steps.collect_zap_evidence.outputs.zap_report_exists }}
       zap_scan_status: ${{ steps.collect_zap_evidence.outputs.zap_scan_status }}
+      zap_fail_alerts_present: ${{ steps.collect_zap_evidence.outputs.zap_fail_alerts_present }}
     steps:
       - uses: actions/checkout@v4
 
@@ -529,12 +530,35 @@ jobs:
           )
 
           report_found=false
+          fail_alerts_present=false
           for file in "${report_files[@]}"; do
             if [ -f "$file" ]; then
               cp "$file" artifacts/zap-api/
               report_found=true
             fi
           done
+
+          if [ -f report_json.json ]; then
+            if jq -e '
+              [
+                .site[]?.alerts[]?.pluginid
+              ]
+              | any(
+                  . == "40012" or
+                  . == "40014" or
+                  . == "40016" or
+                  . == "40017" or
+                  . == "40018" or
+                  . == "40019" or
+                  . == "40020" or
+                  . == "40021" or
+                  . == "40022" or
+                  . == "40024"
+                )
+            ' report_json.json >/dev/null; then
+              fail_alerts_present=true
+            fi
+          fi
 
           curl -sS -D artifacts/zap-api/api-docs.headers \
             http://localhost:5001/api-docs.json \
@@ -552,16 +576,19 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.dast.yml logs db \
             > artifacts/zap-api/db.log 2>&1 || true
 
-          if [ "${{ steps.zap_api.outcome }}" = "success" ]; then
+          if [ "$fail_alerts_present" = "true" ]; then
+            scan_status=findings
+          elif [ "${{ steps.zap_api.outcome }}" = "success" ]; then
             scan_status=clean
           elif [ "$report_found" = "true" ]; then
-            scan_status=findings
+            scan_status=report-no-fail-alerts
           else
             scan_status=scan-error
           fi
 
           echo "zap_report_exists=$report_found" >> "$GITHUB_OUTPUT"
           echo "zap_scan_status=$scan_status" >> "$GITHUB_OUTPUT"
+          echo "zap_fail_alerts_present=$fail_alerts_present" >> "$GITHUB_OUTPUT"
 
       - name: Upload ZAP API evidence
         if: always()
@@ -580,6 +607,8 @@ jobs:
         run: |
           if [ "${{ steps.collect_zap_evidence.outputs.zap_scan_status }}" = "findings" ]; then
             echo "::warning::ZAP API scan found FAIL-level alerts (SQL injection / XSS). Review the zap-api-evidence artifact before approving."
+          elif [ "${{ steps.collect_zap_evidence.outputs.zap_scan_status }}" = "report-no-fail-alerts" ]; then
+            echo "::warning::ZAP API scan exited non-zero, but the uploaded report does not contain SQL injection or XSS alerts. Review the zap-api-evidence artifact before approving."
           elif [ "${{ steps.collect_zap_evidence.outputs.zap_scan_status }}" = "scan-error" ]; then
             echo "::warning::ZAP API scan failed before it could publish a full report. Review the zap-api-evidence artifact for diagnostics before approving."
           else
@@ -613,6 +642,7 @@ jobs:
           ZAP_OUTCOME="${{ needs.dast.outputs.zap_outcome }}"
           ZAP_SCAN_STATUS="${{ needs.dast.outputs.zap_scan_status }}"
           ZAP_REPORT_EXISTS="${{ needs.dast.outputs.zap_report_exists }}"
+          ZAP_FAIL_ALERTS_PRESENT="${{ needs.dast.outputs.zap_fail_alerts_present }}"
 
           if [ "$ZAP_SCAN_STATUS" = "findings" ]; then
             echo "::warning::ZAP found FAIL-level alerts. You are approving with known findings."
@@ -620,6 +650,9 @@ jobs:
             if [ "$ZAP_REPORT_EXISTS" = "true" ]; then
               echo "The artifact includes the generated ZAP API report files."
             fi
+          elif [ "$ZAP_SCAN_STATUS" = "report-no-fail-alerts" ]; then
+            echo "::warning::ZAP API scan exited non-zero, but the uploaded report does not contain SQL injection or XSS alerts."
+            echo "Review the zap-api-evidence artifact before approving."
           elif [ "$ZAP_SCAN_STATUS" = "scan-error" ]; then
             echo "::warning::ZAP API scan failed before producing a full report."
             echo "Review the zap-api-evidence artifact for docker logs, compose status, and api-docs capture before approving."
