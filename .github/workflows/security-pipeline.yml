@@ -522,15 +522,15 @@ jobs:
           hit "GET /api/insecure-users/{userid}/clothes" \
             http://localhost:5001/api/insecure-users/1/clothes
 
-          hit "POST /api/insecure-users/clothes" \
-            -H "Content-Type: application/json" \
-            -d '{"userid":"1","clothid":"2"}' \
-            http://localhost:5001/api/insecure-users/clothes
-
           hit "POST /api/insecure-users/remove-cloth" \
             -H "Content-Type: application/json" \
             -d '{"userid":"1","clothid":"2"}' \
             http://localhost:5001/api/insecure-users/remove-cloth
+
+          hit "POST /api/insecure-users/clothes" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":"1","clothid":"2"}' \
+            http://localhost:5001/api/insecure-users/clothes
 
           hit "GET /api/safe-users" \
             -H "Authorization: Bearer ${DAST_TOKEN}" \
