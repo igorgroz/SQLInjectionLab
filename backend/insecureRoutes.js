@@ -30,7 +30,10 @@ router.get("/insecure-users/:userid", async (req, res) => {
     res.json(result.rows[0] || {});
   } catch (err) {
     console.error("Error fetching insecure user:", err);
-    res.status(500).json({ error: err.message });
+    // Plain text preserves raw Postgres error strings (e.g. `syntax error at or near "`)
+    // so ZAP's PostgreSQL injection patterns can match. JSON encoding turns `"` → `\"`
+    // which breaks ZAP's pattern matching.
+    res.status(500).type("text").send(err.message);
   }
 });
 
@@ -51,7 +54,7 @@ router.get("/insecure-users/:userid/clothes", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching insecure user clothes:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).type("text").send(err.message);
   }
 });
 
@@ -73,7 +76,7 @@ router.post("/insecure-users/clothes", async (req, res) => {
     });
   } catch (err) {
     console.error("SQLi route error:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).type("text").send(err.message);
   }
 });
 
@@ -95,7 +98,7 @@ router.post("/insecure-users/remove-cloth", async (req, res) => {
     });
   } catch (err) {
     console.error("Error removing clothing insecurely:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).type("text").send(err.message);
   }
 });
 

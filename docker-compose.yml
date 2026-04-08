@@ -12,6 +12,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgredb/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sql_lab_user -d sqlinjproject"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   backend:
     container_name: sqlinj-backend
@@ -26,7 +32,8 @@ services:
     ports:
       - "5001:5001"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
     container_name: sqlinj-frontend
