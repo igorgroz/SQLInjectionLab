@@ -629,6 +629,7 @@ jobs:
             fi
           done
 
+          # Primary check: JSON report (written by API scan at end of run).
           if [ -f report_json.json ]; then
             if jq -e '
               [
@@ -649,6 +650,19 @@ jobs:
             ' report_json.json >/dev/null; then
               fail_alerts_present=true
             fi
+          fi
+
+          # Fallback check: HTML report (written incrementally; contains active
+          # scan findings even when the JSON is only a baseline-phase snapshot).
+          # ZAP embeds pluginid values as plain text inside the HTML body.
+          if [ "$fail_alerts_present" = "false" ] && [ -f report_html.html ]; then
+            for pid in 40012 40014 40016 40017 40018 40019 40020 40021 40022 40024; do
+              if grep -q "pluginid.*${pid}\|${pid}.*pluginid\|\"${pid}\"" report_html.html; then
+                fail_alerts_present=true
+                echo "::warning::SQLi/XSS pluginid ${pid} found in HTML report (not in JSON — active scan timing issue)"
+                break
+              fi
+            done
           fi
 
           curl -sS -D artifacts/zap-api/api-docs.headers \
