@@ -30,10 +30,15 @@ router.get("/insecure-users/:userid", async (req, res) => {
     res.json(result.rows[0] || {});
   } catch (err) {
     console.error("Error fetching insecure user:", err);
-    // Plain text preserves raw Postgres error strings (e.g. `syntax error at or near "`)
-    // so ZAP's PostgreSQL injection patterns can match. JSON encoding turns `"` → `\"`
-    // which breaks ZAP's pattern matching.
-    res.status(500).type("text").send(err.message);
+    // Return 200 with the raw Postgres error in the body.
+    // • 200 status: ZAP does not count non-5xx responses as scan errors, so the
+    //   active scanner completes without overflowing its error threshold (which
+    //   causes exit code 3). Real-world insecure apps often return 200 with error
+    //   text embedded in the page — this is the more realistic attack surface.
+    // • plain text (not JSON): preserves `"` characters so ZAP's PostgreSQL
+    //   injection pattern (pluginid 40018) can match `syntax error at or near "`.
+    //   JSON encoding would escape `"` → `\"` and break pattern matching.
+    res.status(200).type("text").send(err.message);
   }
 });
 
@@ -54,7 +59,9 @@ router.get("/insecure-users/:userid/clothes", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching insecure user clothes:", err);
-    res.status(500).type("text").send(err.message);
+    // 200 + plain text: avoids ZAP error-count overflow; body still exposes
+    // raw Postgres error for ZAP pluginid 40018 pattern matching.
+    res.status(200).type("text").send(err.message);
   }
 });
 
@@ -76,7 +83,9 @@ router.post("/insecure-users/clothes", async (req, res) => {
     });
   } catch (err) {
     console.error("SQLi route error:", err.message);
-    res.status(500).type("text").send(err.message);
+    // 200 + plain text: avoids ZAP error-count overflow; body still exposes
+    // raw Postgres error for ZAP pluginid 40018 pattern matching.
+    res.status(200).type("text").send(err.message);
   }
 });
 
@@ -98,7 +107,9 @@ router.post("/insecure-users/remove-cloth", async (req, res) => {
     });
   } catch (err) {
     console.error("Error removing clothing insecurely:", err.message);
-    res.status(500).type("text").send(err.message);
+    // 200 + plain text: avoids ZAP error-count overflow; body still exposes
+    // raw Postgres error for ZAP pluginid 40018 pattern matching.
+    res.status(200).type("text").send(err.message);
   }
 });
 
