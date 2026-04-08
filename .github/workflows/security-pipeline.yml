@@ -723,6 +723,11 @@ jobs:
       - name: Tear down stack
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.dast.yml down -v
+        env:
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          POSTGRES_PASSWORD: ${{ secrets.DAST_DB_PASSWORD }}
+          DAST_JWT_SECRET: ${{ secrets.DAST_JWT_SECRET }}
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 7 — DAST Manual Review Gate
