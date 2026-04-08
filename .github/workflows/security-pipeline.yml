@@ -570,10 +570,13 @@ jobs:
         # its internal error counter, and throw an uncaught exception (exit code 3)
         # before the JSON report is written.
         #
-        # Solution: strip /api/safe-users/* from the spec so ZAP only scans the
-        # intentionally vulnerable routes — which is exactly what we want to test.
-        # A sidecar Python HTTP server serves the filtered spec on port 5002 so
-        # ZAP can reach it via the same --network host path as localhost:5001.
+        # Solution: strip /api/safe-users/* from the spec and write the result
+        # to the workspace. The ZAP Docker action mounts $GITHUB_WORKSPACE at
+        # /zap/wrk/, so ZAP reads the spec as a local file (import_file API)
+        # rather than fetching it via HTTP. This is important: if we serve the
+        # spec via an HTTP server, ZAP adds that server's host to its scan scope
+        # and crawls it in addition to the real app — using a file path avoids
+        # that entirely and keeps the scan scope to localhost:5001 only.
         run: |
           curl -sf http://localhost:5001/api-docs.json \
             | jq '
@@ -582,13 +585,10 @@ jobs:
                 )
               ' > openapi-insecure.json
 
-          echo "Filtered spec paths:"
+          echo "Filtered spec paths (these are the only routes ZAP will scan):"
           jq -r '.paths | keys[]' openapi-insecure.json
-
-          python3 -m http.server 5002 &
-          sleep 1
-          curl -sf http://localhost:5002/openapi-insecure.json \
-            | jq -r '"Spec reachable — \(.paths | length) path(s) exported"'
+          echo "Target server from spec:"
+          jq -r '.servers[].url' openapi-insecure.json
 
       - name: ZAP — Baseline scan (passive + spider)
         # fail_action: false — passive scan findings are informational.
@@ -612,7 +612,7 @@ jobs:
         id: zap_api
         uses: zaproxy/action-api-scan@v0.9.0
         with:
-          target: 'http://localhost:5002/openapi-insecure.json'
+          target: '/zap/wrk/openapi-insecure.json'
           format: openapi
           rules_file_name: '.zap/rules.tsv'
           fail_action: true
