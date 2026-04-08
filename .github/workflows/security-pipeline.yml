@@ -556,6 +556,11 @@ jobs:
             -d '{"userid":1,"clothid":2}' \
             http://localhost:5001/api/safe-users/remove-cloth
 
+          # Export token so ZAP API scan can inject it as a Bearer header.
+          # Without this, safe-route requests return 401 and ZAP exits with
+          # code 3 (uncaught exception) before writing the JSON report.
+          echo "DAST_BEARER_TOKEN=${DAST_TOKEN}" >> "$GITHUB_ENV"
+
       - name: Make workspace writable for ZAP container
         run: chmod a+w ${{ github.workspace }}
 
@@ -585,6 +590,16 @@ jobs:
           rules_file_name: '.zap/rules.tsv'
           fail_action: true
           artifact_name: zap-api-report
+          # Inject the pre-minted DAST Bearer token for all requests so ZAP
+          # can reach the authenticated /api/safe-users routes. Without this,
+          # every safe-route request returns 401, ZAP exceeds its error threshold,
+          # and exits with code 3 (exception) before writing the JSON report.
+          cmd_options: >-
+            -z "-config replacer.full_list(0).description=auth
+                -config replacer.full_list(0).enabled=true
+                -config replacer.full_list(0).matchtype=REQ_HEADER
+                -config replacer.full_list(0).matchstr=Authorization
+                -config replacer.full_list(0).replacement=Bearer ${{ env.DAST_BEARER_TOKEN }}"
         continue-on-error: true
 
       - name: Collect ZAP API evidence
