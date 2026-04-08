@@ -49,6 +49,16 @@ services:
       # Verbose logging helps when reviewing ZAP scan output
       LOG_LEVEL: debug
 
+      # ── DB connection ─────────────────────────────────────────────
+      # DB_HOST MUST be the Compose service name, not localhost.
+      # The backend .env is gitignored; these vars are not present in CI
+      # unless explicitly set here.
+      DB_HOST:     db
+      DB_PORT:     5432
+      DB_NAME:     sqlinjproject
+      DB_USER:     sql_lab_user
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+
     # Expose on host so ZAP (running as a sibling container) can reach it.
     # Port matches base docker-compose.yml (5001) so the backend's default
     # PORT=5001 is consistent across both compose files.
