@@ -544,17 +544,17 @@ jobs:
             -H "Authorization: Bearer ${DAST_TOKEN}" \
             http://localhost:5001/api/safe-users/1/clothes
 
-          hit "POST /api/safe-users/clothes" \
-            -H "Authorization: Bearer ${DAST_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"userid":1,"clothid":2}' \
-            http://localhost:5001/api/safe-users/clothes
-
           hit "POST /api/safe-users/remove-cloth" \
             -H "Authorization: Bearer ${DAST_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"userid":1,"clothid":2}' \
             http://localhost:5001/api/safe-users/remove-cloth
+
+          hit "POST /api/safe-users/clothes" \
+            -H "Authorization: Bearer ${DAST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"userid":1,"clothid":2}' \
+            http://localhost:5001/api/safe-users/clothes
 
           # Export token so ZAP API scan can inject it as a Bearer header.
           # Without this, safe-route requests return 401 and ZAP exits with
