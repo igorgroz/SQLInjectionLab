@@ -442,7 +442,7 @@ jobs:
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
-      zap_outcome: ${{ steps.zap_api.outcome }}
+      zap_outcome: ${{ steps.zap_api.outputs.outcome }}
       zap_report_exists: ${{ steps.collect_zap_evidence.outputs.zap_report_exists }}
       zap_scan_status: ${{ steps.collect_zap_evidence.outputs.zap_scan_status }}
       zap_fail_alerts_present: ${{ steps.collect_zap_evidence.outputs.zap_fail_alerts_present }}
@@ -604,27 +604,47 @@ jobs:
           artifact_name: zap-baseline-report
 
       - name: ZAP — API scan (active, against OpenAPI spec)
-        # Targets the filtered spec (insecure routes only) as a file path inside
-        # the ZAP container (/zap/wrk/ = $GITHUB_WORKSPACE).
-        # Insecure routes require no auth, so no replacer/token injection needed.
+        # Runs ZAP via docker run instead of the zaproxy/action-api-scan action.
         #
-        # fail_action: false  — ZAP Python script exits 0/1 (no FAIL-alert
-        #   processing code path). With fail_action: true, ZAP processes FAIL
-        #   alerts post-scan and throws an unhandled exception (exit code 3)
-        #   against large SQLi result sets. Our gate is fully independent of
-        #   ZAP's exit code — the collect-evidence step checks the HTML report
-        #   directly for pluginid 40018/40022 via the HTML fallback logic.
+        # Why docker run directly:
+        #   The action-api-scan@v0.9.0 action offers no way to set JAVA_OPTS,
+        #   and the step log gets truncated before the exception traceback is
+        #   visible. With 20+ alerts and hundreds of stored request/response
+        #   pairs in ZAP's in-memory DB, the JVM hits its default heap ceiling
+        #   during post-scan report generation / zap.core.alerts() REST call,
+        #   causing an OOM or timeout → unhandled exception → exit code 3.
         #
-        # continue-on-error  — artifact upload and tear-down always run;
-        #                       the dast-gate job below is the actual pipeline gate.
+        # Fix: -e JAVA_OPTS="-Xmx2g" gives ZAP 2 GB heap on the 7 GB runner.
+        # -I flag: ignore FAIL-alert exit-code logic; our gate reads the HTML
+        #   report directly for pluginid 40018/40022 (HTML fallback).
+        # 2>&1 | tee: captures the full Python + JVM output to an artifact so
+        #   any residual exception is visible without log-truncation issues.
+        # exit 0: always succeed this step; dast-gate is the actual gate.
         id: zap_api
-        uses: zaproxy/action-api-scan@v0.9.0
-        with:
-          target: '/zap/wrk/openapi-insecure.json'
-          format: openapi
-          rules_file_name: '.zap/rules.tsv'
-          fail_action: false
-          artifact_name: zap-api-report
+        run: |
+          set +e
+          mkdir -p artifacts/zap-api
+          docker run --rm \
+            --network=host \
+            -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            -e JAVA_OPTS="-Xmx2g -Xms512m" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            python zap-api-scan.py \
+              -t /zap/wrk/openapi-insecure.json \
+              -f openapi \
+              -c /zap/wrk/.zap/rules.tsv \
+              -J report_json.json \
+              -w report_md.md \
+              -r report_html.html \
+              -I \
+            2>&1 | tee artifacts/zap-api/zap-stdout.txt
+          ZAP_EXIT=${PIPESTATUS[0]}
+          echo "ZAP docker exit code: ${ZAP_EXIT}"
+          # Propagate meaningful exit codes as a step output for gate logic,
+          # but always exit 0 so subsequent steps (artifact upload, tear-down)
+          # are never skipped.
+          echo "outcome=$([ $ZAP_EXIT -eq 0 ] && echo success || echo failure)" >> "$GITHUB_OUTPUT"
+          exit 0
         continue-on-error: true
 
       - name: Collect ZAP API evidence
@@ -708,7 +728,7 @@ jobs:
 
           if [ "$fail_alerts_present" = "true" ]; then
             scan_status=findings
-          elif [ "${{ steps.zap_api.outcome }}" = "success" ]; then
+          elif [ "${{ steps.zap_api.outputs.outcome }}" = "success" ]; then
             scan_status=clean
           elif [ "$report_found" = "true" ]; then
             scan_status=report-no-fail-alerts
