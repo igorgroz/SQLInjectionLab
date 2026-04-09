@@ -604,10 +604,18 @@ jobs:
           artifact_name: zap-baseline-report
 
       - name: ZAP — API scan (active, against OpenAPI spec)
-        # Targets the filtered spec (insecure routes only) served on port 5002.
+        # Targets the filtered spec (insecure routes only) as a file path inside
+        # the ZAP container (/zap/wrk/ = $GITHUB_WORKSPACE).
         # Insecure routes require no auth, so no replacer/token injection needed.
-        # fail_action: true  → ZAP exits 2 on FAIL-level alerts, 0/1 on clean.
-        # continue-on-error  → artifact upload and tear-down always run;
+        #
+        # fail_action: false  — ZAP Python script exits 0/1 (no FAIL-alert
+        #   processing code path). With fail_action: true, ZAP processes FAIL
+        #   alerts post-scan and throws an unhandled exception (exit code 3)
+        #   against large SQLi result sets. Our gate is fully independent of
+        #   ZAP's exit code — the collect-evidence step checks the HTML report
+        #   directly for pluginid 40018/40022 via the HTML fallback logic.
+        #
+        # continue-on-error  — artifact upload and tear-down always run;
         #                       the dast-gate job below is the actual pipeline gate.
         id: zap_api
         uses: zaproxy/action-api-scan@v0.9.0
@@ -615,7 +623,7 @@ jobs:
           target: '/zap/wrk/openapi-insecure.json'
           format: openapi
           rules_file_name: '.zap/rules.tsv'
-          fail_action: true
+          fail_action: false
           artifact_name: zap-api-report
         continue-on-error: true
 
