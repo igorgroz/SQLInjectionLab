@@ -626,6 +626,7 @@ jobs:
           mkdir -p artifacts/zap-api
           docker run --rm \
             --network=host \
+            --user "$(id -u):$(id -g)" \
             -v "${{ github.workspace }}:/zap/wrk/:rw" \
             -e JAVA_OPTS="-Xmx2g -Xms512m" \
             ghcr.io/zaproxy/zaproxy:stable \
