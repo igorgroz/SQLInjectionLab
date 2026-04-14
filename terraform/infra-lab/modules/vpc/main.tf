@@ -108,9 +108,9 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(var.tags, {
-    Name = var.single_nat_gateway
+    Name = (var.single_nat_gateway
       ? "${var.cluster_name}-nat-eip"
-      : "${var.cluster_name}-nat-eip-${var.azs[count.index]}"
+      : "${var.cluster_name}-nat-eip-${var.azs[count.index]}")
   })
 }
 
@@ -127,9 +127,9 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(var.tags, {
-    Name = var.single_nat_gateway
+    Name = (var.single_nat_gateway
       ? "${var.cluster_name}-nat"
-      : "${var.cluster_name}-nat-${var.azs[count.index]}"
+      : "${var.cluster_name}-nat-${var.azs[count.index]}")
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -177,9 +177,9 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(var.tags, {
-    Name = var.single_nat_gateway
+    Name = (var.single_nat_gateway
       ? "${var.cluster_name}-rt-private"
-      : "${var.cluster_name}-rt-private-${var.azs[count.index]}"
+      : "${var.cluster_name}-rt-private-${var.azs[count.index]}")
   })
 }
 
