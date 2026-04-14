@@ -310,14 +310,14 @@ resource "aws_eks_node_group" "main" {
   # Worker nodes go into private subnets — they're not internet-facing.
   subnet_ids = var.private_subnet_ids
 
-  # Amazon Linux 2 is the standard EKS-optimised AMI. It ships with:
-  # - kubelet, container runtime (containerd), VPC CNI pre-installed
-  # - Kernel configured for container workloads
-  # AL2023 is the newer option; AL2 has broader community testing at this point.
+  # Amazon Linux 2023 is required for EKS 1.33+. AL2 (AL2_x86_64) is only
+  # supported up to 1.32. AL2023 ships with the same EKS-optimised components:
+  # kubelet, containerd, VPC CNI — plus improved security defaults (SELinux,
+  # IMDSv2-only by default, smaller attack surface than AL2).
   #
   # Note: disk_size cannot be set here when a launch_template is provided.
   # Disk sizing is in the launch template's block_device_mappings below.
-  ami_type       = "AL2_x86_64"
+  ami_type       = "AL2023_x86_64_STANDARD"
   instance_types = [var.node_instance_type]
 
   scaling_config {
