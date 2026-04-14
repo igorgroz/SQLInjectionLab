@@ -39,3 +39,25 @@ terraform/**/.terraform/
 # Semgrep community rule IDs are not stable across versions. File-level exclusion
 # is more robust for a pre-existing, documented accepted risk.
 k8s/db/deployment.yaml
+
+# ── Terraform — accepted risk suppressions ────────────────────────────────────
+# Inline # nosemgrep comments in HCL are unreliable — Semgrep matches on
+# multi-line resource blocks so comment placement is non-deterministic across
+# rule versions. File-level suppression here is the robust alternative.
+# All decisions are documented in LAB_SECURITY_DECISIONS.md.
+#
+# terraform.aws.security.aws-subnet-has-public-ip-address
+#   vpc/main.tf: public subnets intentionally have map_public_ip_on_launch=true
+#   for ALB ENIs and NAT GW EIPs. Worker nodes are in private subnets. (TF-01)
+terraform/infra-lab/modules/vpc/main.tf
+#
+# terraform.aws.security.aws-ecr-mutable-image-tags
+#   ecr/main.tf: false positive — Semgrep cannot resolve for_each variable
+#   references. image_tag_mutability defaults to IMMUTABLE in variables.tf
+#   and is passed as IMMUTABLE in every module call.
+terraform/infra-lab/modules/ecr/main.tf
+#
+# terraform.aws.security.aws-codebuild-project-unencrypted
+#   infra-base/main.tf: accepted risk (lab) — no KMS CMK on CodeBuild.
+#   Project has no artifacts and no sensitive env vars. Documented in TF-03.
+terraform/infra-base/main.tf

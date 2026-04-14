@@ -56,16 +56,13 @@ resource "aws_internet_gateway" "main" {
 #   discover which subnets to place internet-facing ALBs into when you create
 #   a Kubernetes Ingress resource. Without this tag, Ingress creation fails
 #   with "no subnets found" — a very common gotcha.
-
 resource "aws_subnet" "public" {
   count = length(var.azs)
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = var.azs[count.index]
-  map_public_ip_on_launch = true # nosemgrep: terraform.aws.security.aws-subnet-has-public-ip-address
-  # Public subnets intentionally assign public IPs — required for ALB ENIs and NAT
-  # gateway Elastic IPs. Worker nodes are in private subnets and do NOT get public IPs.
+  map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
     Name                                        = "${var.cluster_name}-public-${var.azs[count.index]}"

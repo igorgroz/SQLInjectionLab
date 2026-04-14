@@ -141,14 +141,8 @@ resource "aws_cloudwatch_log_group" "codebuild_destroy" {
 
 # =============================================================================
 # CodeBuild project — terraform destroy runner
+# Accepted risk (lab): no KMS CMK encryption. See LAB_SECURITY_DECISIONS.md TF-03.
 # =============================================================================
-# nosemgrep: terraform.aws.security.aws-codebuild-project-unencrypted
-# Accepted risk (lab): No KMS encryption key on this CodeBuild project.
-# Production posture: add a CMK via aws_kms_key + set encryption_key on the
-# project. KMS would encrypt build artifacts and protect environment variables
-# at rest. In this lab the project has no artifacts and no sensitive env vars
-# (credentials come from the IAM role, not environment variables).
-
 resource "aws_codebuild_project" "nightly_destroy" {
   name          = "sqlinj-nightly-destroy"
   description   = "Nightly terraform destroy of infra-lab — prevents runaway lab costs"
