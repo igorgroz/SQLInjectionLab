@@ -83,7 +83,7 @@ data "aws_iam_policy_document" "eso_assume" {
 resource "aws_iam_role" "eso" {
   name               = "${var.cluster_name}-eso-role"
   assume_role_policy = data.aws_iam_policy_document.eso_assume.json
-  description        = "IRSA role for External Secrets Operator — reads from Secrets Manager"
+  description        = "IRSA role for External Secrets Operator - reads from Secrets Manager"
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-eso-role"

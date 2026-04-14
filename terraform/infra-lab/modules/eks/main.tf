@@ -208,6 +208,15 @@ resource "aws_eks_cluster" "main" {
     public_access_cidrs     = var.cluster_endpoint_public_access_cidrs
   }
 
+  # API_AND_CONFIG_MAP: enables the new EKS Access Entries API (required for
+  # aws_eks_access_entry resources) while keeping the legacy aws-auth ConfigMap
+  # as a fallback. "API" alone would remove ConfigMap support entirely — not
+  # worth the disruption for a lab. Production recommendation: migrate to "API"
+  # once all access is managed via Access Entries.
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
   # Audit logs are critical for security monitoring. Enable them from day one.
   # api       — every kubectl command, RBAC decision
   # audit     — detailed request log with user, source IP, resource, verb
@@ -305,9 +314,11 @@ resource "aws_eks_node_group" "main" {
   # - kubelet, container runtime (containerd), VPC CNI pre-installed
   # - Kernel configured for container workloads
   # AL2023 is the newer option; AL2 has broader community testing at this point.
+  #
+  # Note: disk_size cannot be set here when a launch_template is provided.
+  # Disk sizing is in the launch template's block_device_mappings below.
   ami_type       = "AL2_x86_64"
   instance_types = [var.node_instance_type]
-  disk_size      = var.node_disk_size_gb
 
   scaling_config {
     desired_size = var.node_desired_size
@@ -367,7 +378,22 @@ resource "aws_eks_node_group" "main" {
 
 resource "aws_launch_template" "nodes" {
   name_prefix = "${var.cluster_name}-nodes-"
-  description = "Launch template for EKS node group — enforces IMDSv2"
+  description = "Launch template for EKS node group - enforces IMDSv2"
+
+  # Root EBS volume — must be defined here when launch_template is used with
+  # a managed node group (disk_size on the node group resource is not allowed).
+  # gp3 is cheaper and faster than gp2 for the same size.
+  # encrypted = true: EBS encryption at rest — lab and production posture.
+  block_device_mappings {
+    device_name = "/dev/xvda"   # AL2 root device name
+
+    ebs {
+      volume_size           = var.node_disk_size_gb
+      volume_type           = "gp3"
+      delete_on_termination = true
+      encrypted             = true
+    }
+  }
 
   metadata_options {
     http_endpoint               = "enabled"
