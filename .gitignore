@@ -1,3 +1,15 @@
+# Terraform — local state, lock files, and plan artifacts must never be committed
+# State files contain sensitive values; plan files can contain secrets in plaintext
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfstate.*.backup
+**/tfplan
+**/tfplan-destroy
+**/*.tfvars
+**/*.tfvars.json
+
 node_modules/
 frontend/node_modules/
 backend/node_modules/
