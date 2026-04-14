@@ -31,7 +31,10 @@ resource "aws_ecr_repository" "repos" {
   for_each = var.repositories
 
   name                 = each.key
-  image_tag_mutability = each.value.image_tag_mutability
+  image_tag_mutability = each.value.image_tag_mutability # nosemgrep: terraform.aws.security.aws-ecr-mutable-image-tags
+  # False positive: variable default is "IMMUTABLE" (see variables.tf). Semgrep cannot
+  # resolve dynamic variable references in for_each loops. All repos in this module
+  # are configured as IMMUTABLE — see the module call in infra-lab/main.tf.
 
   image_scanning_configuration {
     scan_on_push = each.value.scan_on_push

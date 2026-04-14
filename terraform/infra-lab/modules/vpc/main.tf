@@ -63,7 +63,9 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = var.azs[count.index]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = true # nosemgrep: terraform.aws.security.aws-subnet-has-public-ip-address
+  # Public subnets intentionally assign public IPs — required for ALB ENIs and NAT
+  # gateway Elastic IPs. Worker nodes are in private subnets and do NOT get public IPs.
 
   tags = merge(var.tags, {
     Name                                        = "${var.cluster_name}-public-${var.azs[count.index]}"

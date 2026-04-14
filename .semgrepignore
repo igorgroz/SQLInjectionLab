@@ -27,3 +27,15 @@ frontend/build/
 # earlier AWS/EKS approach. None of it runs in the current stack. Excluding to
 # prevent false positives and noise in SAST results.
 Archive/
+
+# ── Terraform state/cache (belt-and-suspenders alongside .gitignore) ──────────
+terraform/**/.terraform/
+
+# ── K8s database deployment ───────────────────────────────────────────────────
+# k8s/db/deployment.yaml runs PostgreSQL which requires runAsNonRoot: false.
+# Postgres manages its own internal user (uid 999) and the container entrypoint
+# must start as root to set up data directory permissions before dropping privileges.
+# The inline # nosemgrep comment on line 59 was suppressing this correctly, but
+# Semgrep community rule IDs are not stable across versions. File-level exclusion
+# is more robust for a pre-existing, documented accepted risk.
+k8s/db/deployment.yaml
