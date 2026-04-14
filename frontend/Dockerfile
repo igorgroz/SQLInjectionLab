@@ -18,6 +18,10 @@ RUN npm run build
 # k8s service maps external port 80 → targetPort 8080 so the ingress is unchanged.
 FROM nginxinc/nginx-unprivileged:alpine
 
+# Cache-busting build arg — same pattern as backend/Dockerfile.
+# Forces apk upgrade to re-run on every pipeline build, picking up patched CVEs.
+ARG BUILDDATE=unknown
+
 # Patch Alpine packages to eliminate Trivy-flagged CVEs.
 # Must run as root; we drop back to nginx immediately after.
 USER root

@@ -5,6 +5,14 @@ FROM node:20-alpine
 # Set the working directory inside the container
 WORKDIR /app
 
+# Cache-busting build arg — forces the apk upgrade layer to rebuild on every
+# pipeline run so newly patched Alpine CVEs are always applied.
+# The ARG value (github.run_id) is passed from the pipeline. Because Docker
+# includes ARG values in the layer cache key, this layer never hits cache.
+# Layers BELOW this (npm ci etc.) still cache normally since they depend on
+# COPY instructions, not on BUILDDATE.
+ARG BUILDDATE=unknown
+
 # Patch Alpine base packages before installing app deps.
 # Eliminates Trivy-flagged CVEs in musl, libssl, etc. that ship with the base image.
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
