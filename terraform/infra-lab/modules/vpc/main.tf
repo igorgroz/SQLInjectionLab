@@ -171,9 +171,9 @@ resource "aws_route_table" "private" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.single_nat_gateway
+    nat_gateway_id = (var.single_nat_gateway
       ? aws_nat_gateway.main[0].id
-      : aws_nat_gateway.main[count.index].id
+      : aws_nat_gateway.main[count.index].id)
   }
 
   tags = merge(var.tags, {
@@ -187,9 +187,9 @@ resource "aws_route_table_association" "private" {
   count = length(var.azs)
 
   subnet_id = aws_subnet.private[count.index].id
-  route_table_id = var.single_nat_gateway
+  route_table_id = (var.single_nat_gateway
     ? aws_route_table.private[0].id
-    : aws_route_table.private[count.index].id
+    : aws_route_table.private[count.index].id)
 }
 
 # ─── VPC Flow Logs ────────────────────────────────────────────────────────────
