@@ -15,7 +15,7 @@
 
 terraform {
   backend "s3" {
-    bucket         = "sqlinj-tfstate-ACCOUNT_ID"   # ← replace after bootstrap
+    bucket         = "sqlinj-tfstate-510151297987"
     key            = "infra-lab/terraform.tfstate"
     region         = "ap-southeast-2"
     dynamodb_table = "sqlinj-tfstate-lock"
