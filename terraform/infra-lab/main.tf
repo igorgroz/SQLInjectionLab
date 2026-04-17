@@ -88,6 +88,39 @@ module "ecr" {
 }
 
 # =============================================================================
+# EKS Admin Access — grant kubectl access to the Terraform operator
+# =============================================================================
+# EKS with API_AND_CONFIG_MAP authentication mode does NOT automatically create
+# an access entry for the cluster creator. Without this, kubectl fails with
+# "server has asked for credentials" even though AWS credentials are valid.
+#
+# We use data.aws_caller_identity to dynamically target whoever is running
+# Terraform — no hardcoded ARNs, works for any IAM user or assumed role.
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_eks_access_entry" "operator_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/terraform"
+  type          = "STANDARD"
+
+  tags = {
+    Project   = "sqlinj"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_eks_access_policy_association" "operator_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_eks_access_entry.operator_admin.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
+# =============================================================================
 # IAM/IRSA — Pod identity roles and Secrets Manager scaffolding
 # =============================================================================
 
