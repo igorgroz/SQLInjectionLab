@@ -29,3 +29,4 @@ backend/.env
 SQLInjproject.zip
 *.pem
 *.zip
+.cosign-home/
