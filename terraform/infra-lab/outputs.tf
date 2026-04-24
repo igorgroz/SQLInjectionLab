@@ -78,6 +78,11 @@ output "backend_role_arn" {
   value       = module.iam_irsa.backend_role_arn
 }
 
+output "alb_controller_role_arn" {
+  description = "IRSA role ARN for the AWS Load Balancer Controller — annotate the SA with this"
+  value       = aws_iam_role.alb_controller.arn
+}
+
 output "db_password_secret_name" {
   description = "Secrets Manager secret name for DB password — set actual value before deploying"
   value       = module.iam_irsa.db_password_secret_name

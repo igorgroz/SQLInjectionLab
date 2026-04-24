@@ -1,0 +1,66 @@
+# =============================================================================
+# aws-load-balancer-controller — Helm values
+#
+# Chart:     eks/aws-load-balancer-controller
+# App:       v3.2.2   (matches terraform/infra-lab/alb-controller-iam-policy-v3.2.2.json)
+# Install:
+#   helm repo add eks https://aws.github.io/eks-charts
+#   helm repo update eks
+#   helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+#     --namespace kube-system --version <chart-ver-matching-v3.2.2> \
+#     -f helm/alb-controller/values.yaml
+#
+# The IRSA role referenced by serviceAccount.annotations is created by
+# terraform/infra-lab/alb-controller-iam.tf and exported as the
+# `alb_controller_role_arn` output. Update it here if the role is renamed.
+# =============================================================================
+
+# --- Cluster context ---------------------------------------------------------
+clusterName: sqlinj-eks
+region: ap-southeast-2
+vpcId: vpc-0053d24d22b68ce02
+
+# --- ServiceAccount (IRSA binding) -------------------------------------------
+# The chart creates the SA in kube-system, name "aws-load-balancer-controller".
+# The eks.amazonaws.com/role-arn annotation is what makes EKS inject the
+# projected ServiceAccount token that the AWS SDK swaps for STS credentials.
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/sqlinj-eks-alb-controller-role
+
+# --- Replicas -----------------------------------------------------------------
+# Lab: single replica is fine. Prod: 2+ across distinct AZs with
+# topologySpreadConstraints so a single-AZ outage doesn't stall reconciliation.
+replicaCount: 1
+
+# --- Pod security baseline ---------------------------------------------------
+# The chart defaults are already reasonable (non-root, readOnlyRootFilesystem),
+# but pin them explicitly so a future chart default change doesn't silently
+# relax posture.
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+# --- Resource requests/limits -------------------------------------------------
+# Upstream defaults are 200m/500m CPU and 500Mi memory. Lab-appropriate.
+resources:
+  requests:
+    cpu: 100m
+    memory: 200Mi
+  limits:
+    cpu: 500m
+    memory: 500Mi
+
+# --- Logging -----------------------------------------------------------------
+logLevel: info    # bump to "debug" briefly if IRSA handshake misbehaves
