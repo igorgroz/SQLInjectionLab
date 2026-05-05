@@ -1,0 +1,118 @@
+# =============================================================================
+# external-secrets-operator — Helm values
+#
+# Chart:      external-secrets/external-secrets
+# Repo:       https://charts.external-secrets.io
+# Install:
+#   helm repo add external-secrets https://charts.external-secrets.io
+#   helm repo update external-secrets
+#   helm search repo external-secrets/external-secrets --versions | head -10
+#   # then pin the chart version below to the row whose APP VERSION you want.
+#   helm upgrade --install external-secrets external-secrets/external-secrets \
+#     --namespace external-secrets --create-namespace \
+#     --version <CHART_VER> \
+#     -f helm/external-secrets/values.yaml \
+#     --wait --timeout 5m
+#
+# IRSA wiring:
+#   - The IAM role `sqlinj-eks-eso-role` (created by terraform/infra-lab/modules/iam-irsa)
+#     trusts the OIDC subject `system:serviceaccount:external-secrets:external-secrets-sa`.
+#   - Therefore: the operator's ServiceAccount MUST be named exactly
+#     `external-secrets-sa` and live in the `external-secrets` namespace.
+#     If either is wrong, AssumeRoleWithWebIdentity will fail with WebIdentityErr.
+#   - The chart provisions THREE ServiceAccounts (controller, webhook, cert-controller).
+#     Only the controller talks to AWS, so only the controller's SA gets the IRSA
+#     annotation. The webhook + cert-controller SAs are left as chart defaults.
+#
+# Permissions reminder (in sqlinj-eks-eso-role):
+#   secretsmanager:GetSecretValue, DescribeSecret, ListSecrets
+#   resource ARN: arn:aws:secretsmanager:ap-southeast-2:510151297987:secret:sqlinj/*
+# =============================================================================
+
+# --- Controller ServiceAccount (IRSA target) ---------------------------------
+serviceAccount:
+  create: true
+  name: external-secrets-sa
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/sqlinj-eks-eso-role
+
+# --- CRDs --------------------------------------------------------------------
+# The chart can install the CRDs for you. Set to false if you manage CRDs
+# separately (e.g., via a GitOps tool that owns CRD lifecycle independently).
+# Lab: true. Prod: usually false, with CRDs applied via a separate kustomize
+# layer so chart upgrades don't fight with CRD ownership.
+installCRDs: true
+
+# --- Replicas ----------------------------------------------------------------
+# Lab: single replica is fine.
+# Prod: 2+, with podAntiAffinity to spread across nodes/AZs and a
+# PodDisruptionBudget so node drains can't take all replicas at once.
+replicaCount: 1
+
+# --- Pod security baseline ---------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+# --- Resources ---------------------------------------------------------------
+# Defaults are reasonable; pinning here so chart-default drift doesn't
+# silently change pod-level QoS class.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# --- Webhook component -------------------------------------------------------
+# Validates ExternalSecret/SecretStore at admission. Keep enabled.
+webhook:
+  create: true
+  replicaCount: 1
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# --- Cert controller ---------------------------------------------------------
+# Manages the internal TLS cert used by the webhook. Auto-rotates.
+certController:
+  create: true
+  replicaCount: 1
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities:
+      drop: [ALL]
+
+# --- Logging / metrics -------------------------------------------------------
+# Default INFO-level logs. Set log.level=debug briefly if IRSA STS calls
+# need to be traced.
+log:
+  level: info
+
+# --- Leader election ---------------------------------------------------------
+# Even with replicaCount=1, leader election is cheap and means scaling to N
+# later is a values change, not a behavioural surprise.
+leaderElect: true

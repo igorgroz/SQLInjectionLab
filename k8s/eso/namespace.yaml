@@ -1,0 +1,39 @@
+# =============================================================================
+# Namespaces required by Phase 3b-3.
+#
+# external-secrets:  Where the ESO operator runs. The IRSA trust policy on
+#                    sqlinj-eks-eso-role pins to the SA in this namespace,
+#                    so this name CANNOT be changed without re-applying
+#                    Terraform.
+#
+# sqlinj:            Where the application runs and where ESO will materialize
+#                    K8s Secrets. Already used by existing minikube manifests;
+#                    declared here for completeness so a fresh cluster can be
+#                    bootstrapped from this directory alone.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    name: external-secrets
+    # Pod Security Admission: enforce the "restricted" baseline. ESO's pods
+    # are written to comply (non-root, readOnlyRootFilesystem, drop ALL caps).
+    # If a future chart bump regresses on these, the kube API server will
+    # reject the pod creation rather than silently lower posture.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sqlinj
+  labels:
+    name: sqlinj
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    # NOTE: app namespace uses "baseline" not "restricted" because the
+    # existing app manifests run nginx as root inside the container by
+    # default. Tightening to "restricted" is a Phase 3b-4 task: edit the
+    # frontend Deployment to use nginx-unprivileged + non-root securityContext,
+    # then bump this label.
