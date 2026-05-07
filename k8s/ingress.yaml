@@ -1,20 +1,43 @@
+# =============================================================================
+# sqlinj-ingress — EKS edition (AWS Load Balancer Controller)
+#
+# Changes from the nginx-Ingress (minikube) version:
+#   - ingressClassName: alb (provisions an AWS ALB, reconciled by ALBC)
+#   - alb.ingress.kubernetes.io/scheme: internet-facing (public ALB)
+#   - alb.ingress.kubernetes.io/target-type: ip (target Pod IPs directly,
+#     no NodePort hop — works because we use the AWS VPC CNI which gives
+#     every Pod a real VPC IP routable inside the VPC)
+#   - alb.ingress.kubernetes.io/listen-ports: HTTP 80 only (no TLS for the lab)
+#   - host rule removed: ALB exposes a generated DNS name, no /etc/hosts
+#     mapping needed
+#   - tls block removed: no cert in the lab. For prod, you'd point this at
+#     an ACM cert via alb.ingress.kubernetes.io/certificate-arn and add
+#     listen-ports HTTPS 443.
+#
+# After apply, get the ALB DNS:
+#   kubectl get ingress sqlinj-ingress -n sqlinj -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Reconciliation takes ~3 minutes from apply to ALB ready.
+# =============================================================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: sqlinj-ingress
   namespace: sqlinj
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # Optional, useful for diagnostics: tag the ALB so it's findable in the AWS console
+    alb.ingress.kubernetes.io/tags: "Project=sqlinj,Environment=lab,ManagedBy=albc"
+    # Optional: add the controller-recommended health check; defaults work for /
+    alb.ingress.kubernetes.io/healthcheck-path: "/"
+    alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
 spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - sqlinj.local
-      secretName: sqlinj-tls
+  ingressClassName: alb
   rules:
-    - host: sqlinj.local
-      http:
+    - http:
         paths:
+          # Static frontend (React SPA)
           - path: /
             pathType: Prefix
             backend:
@@ -22,6 +45,8 @@ spec:
                 name: frontend
                 port:
                   number: 80
+
+          # Backend REST API
           - path: /api
             pathType: Prefix
             backend:
@@ -29,6 +54,8 @@ spec:
                 name: backend
                 port:
                   number: 5001
+
+          # Backend GraphQL endpoints (insecure + secure variants)
           - path: /graphql-insecure
             pathType: Prefix
             backend:
@@ -43,6 +70,8 @@ spec:
                 name: backend
                 port:
                   number: 5001
+
+          # Backend health endpoint (also useful for ALB target group health checks)
           - path: /health
             pathType: Prefix
             backend:

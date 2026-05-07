@@ -1,3 +1,14 @@
+# =============================================================================
+# Postgres Deployment — EKS edition
+#
+# Changes from the minikube version:
+#   - envFrom: split into ConfigMap (POSTGRES_DB, POSTGRES_USER) +
+#     explicit valueFrom for POSTGRES_PASSWORD sourced from the SAME
+#     ESO-managed `db-password` Secret the backend reads — single source
+#     of truth across the password.
+#   - PVC remains; on EKS the default StorageClass dynamically provisions gp2
+#     (or gp3 if you've changed the default). No manifest change needed.
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,12 +29,26 @@ spec:
           image: postgres:16
           ports:
             - containerPort: 5432
+
+          # Non-sensitive postgres init values
           envFrom:
-            - secretRef:
-                name: db-secret
+            - configMapRef:
+                name: db-config
+
+          # Password comes from the same ESO-managed Secret the backend uses
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-password   # synced by ESO from sqlinj/backend/db-password
+                  key: password
+
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+              # Postgres complains if the data dir is the volume root because
+              # of lost+found etc. Use a subPath so it lives in a clean subdir.
+              subPath: pgdata
             - name: init-sql
               mountPath: /docker-entrypoint-initdb.d
           readinessProbe:

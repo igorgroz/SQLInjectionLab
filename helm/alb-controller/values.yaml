@@ -16,9 +16,17 @@
 # =============================================================================
 
 # --- Cluster context ---------------------------------------------------------
+# IDEALLY clusterName would be the only required identifier here, with
+# region and vpcId auto-discovered from EC2 IMDS. That fails on this lab
+# because the EKS launch template is provisioned with the default
+# httpPutResponseHopLimit=1 — pods are 2 hops from IMDS (pod veth -> host
+# eth0 -> IMDS) so the auto-discovery times out. The Terraform fix is to
+# bump httpPutResponseHopLimit to 2 in the launch template metadata_options.
+# Until that lands, hardcode vpcId + region here. UPDATE on every cluster
+# recreate (the VPC ID rotates).
 clusterName: sqlinj-eks
 region: ap-southeast-2
-vpcId: vpc-0053d24d22b68ce02
+vpcId: vpc-0d8f881ab0a666803
 
 # --- ServiceAccount (IRSA binding) -------------------------------------------
 # The chart creates the SA in kube-system, name "aws-load-balancer-controller".

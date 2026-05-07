@@ -1,3 +1,13 @@
+# =============================================================================
+# Backend Deployment — EKS edition
+#
+# Changes from the minikube version:
+#   - image: ECR-hosted, pinned to git SHA 6113a7de... (signed via cosign)
+#   - imagePullPolicy: IfNotPresent (the default; explicit Never was for minikube)
+#   - serviceAccountName: sqlinj-backend-sa (provides IRSA identity for AWS calls)
+#   - envFrom: split into ConfigMap (non-sensitive) + explicit valueFrom for
+#     ESO-managed Secrets (DB_PASSWORD, JWT_SECRET)
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,15 +23,34 @@ spec:
       labels:
         app: backend
     spec:
+      serviceAccountName: sqlinj-backend-sa
       containers:
         - name: backend
-          image: sqlinjproject-backend:latest
-          imagePullPolicy: Never
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-backend:6113a7de7cc994a44c87335b77886709807304e4
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
+
+          # Non-sensitive configuration from ConfigMap
           envFrom:
-            - secretRef:
-                name: backend-secret
+            - configMapRef:
+                name: backend-config
+
+          # Sensitive values from ESO-managed K8s Secrets (synced from AWS
+          # Secrets Manager). Each value is mapped explicitly so a misnamed
+          # key surfaces as a pod-startup error, not a silent fallback.
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-password   # synced by ESO from sqlinj/backend/db-password
+                  key: password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret    # synced by ESO from sqlinj/backend/jwt-secret
+                  key: secret
+
           readinessProbe:
             httpGet:
               path: /health

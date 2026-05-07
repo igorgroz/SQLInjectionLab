@@ -4,6 +4,12 @@ metadata:
   name: postgres-pvc
   namespace: sqlinj
 spec:
+  # Explicit storageClassName so the PVC is unambiguous about which
+  # provisioner it wants (the EBS CSI driver via the gp3 StorageClass we
+  # created out-of-band — see "EKS bootstrap notes" in PHASE3B4.md).
+  # In prod this StorageClass would be created by the same Terraform that
+  # provisions the cluster, not bolted on after.
+  storageClassName: gp3
   accessModes:
     - ReadWriteOnce
   resources:

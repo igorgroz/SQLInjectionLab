@@ -1,0 +1,41 @@
+# =============================================================================
+# Backend ConfigMap — non-sensitive configuration
+#
+# What goes here vs in a Secret:
+#   ConfigMap: hostnames, ports, db name, user name, JWT issuer/audience,
+#              algorithm choices, expiration windows. Visible to anyone
+#              with `kubectl get cm -n sqlinj` — but none of these
+#              values give an attacker capability on their own.
+#   Secret:    DB_PASSWORD and JWT_SECRET. Sourced from AWS Secrets Manager
+#              via ESO ExternalSecrets, NOT defined here.
+#
+# In prod you'd templatize these via Helm/kustomize per environment.
+# For the lab, hard-coded is fine.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: sqlinj
+data:
+  # Database connection (in-cluster postgres)
+  DB_HOST: "db"
+  DB_PORT: "5432"
+  DB_NAME: "sqlinjproject"
+  DB_USER: "sql_lab_user"
+  DB_SSL: "false"
+
+  # JWT validation
+  JWT_ALGS: "HS256"
+  JWT_EXPIRATION: "3600"
+
+  # Entra ID — placeholders. Replace before exercising authenticated routes.
+  # These are NOT secrets (tenant + app IDs are public OAuth metadata) so
+  # they belong in the ConfigMap. The Entra client SECRETS, if used, would
+  # go through ESO + AWS Secrets Manager.
+  ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
+  JWT_ISSUER: "https://sts.windows.net/00000000-0000-0000-0000-000000000000/"
+  JWT_AUDIENCE: "api://00000000-0000-0000-0000-000000000000"
+
+  # App
+  PORT: "5001"
