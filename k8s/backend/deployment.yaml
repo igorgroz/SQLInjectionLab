@@ -26,7 +26,7 @@ spec:
       serviceAccountName: sqlinj-backend-sa
       containers:
         - name: backend
-          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-backend:6113a7de7cc994a44c87335b77886709807304e4
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-backend:cee874764641128cff9be4276fa5223d030d7954
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
