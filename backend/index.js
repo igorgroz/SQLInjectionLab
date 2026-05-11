@@ -49,9 +49,33 @@ app.use((_req, res, next) => {
   next();
 });
 
+// ─── CORS allowlist ─────────────────────────────────────────────────────────
+// Origins are sourced from CORS_ALLOWED_ORIGINS (comma-separated). Each entry
+// is either:
+//   - an exact origin:    https://lab.oznetsecure.com.au
+//   - a wildcard suffix:  *.app.github.dev  (matches any subdomain)
+// Falls back to the local-dev defaults if the env var is unset, so localhost
+// loops keep working without setting the var.
+const corsAllowedOrigins = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  "http://localhost:3000,https://sqlinj.local,*.app.github.dev"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // same-origin / server-to-server / curl
+  return corsAllowedOrigins.some((entry) =>
+    entry.startsWith("*.")
+      ? origin.endsWith(entry.slice(1)) // "*.app.github.dev" → endsWith(".app.github.dev")
+      : entry === origin
+  );
+};
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin === "http://localhost:3000" || origin === "https://sqlinj.local" || origin.endsWith(".app.github.dev")) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       callback(new Error("CORS not allowed: " + origin));

@@ -29,13 +29,25 @@ data:
   JWT_ALGS: "HS256"
   JWT_EXPIRATION: "3600"
 
-  # Entra ID — placeholders. Replace before exercising authenticated routes.
+  # Entra ID — real values for Igor's tenant.
   # These are NOT secrets (tenant + app IDs are public OAuth metadata) so
-  # they belong in the ConfigMap. The Entra client SECRETS, if used, would
+  # they belong in the ConfigMap. Any Entra client SECRETS, if used, would
   # go through ESO + AWS Secrets Manager.
-  ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
-  JWT_ISSUER: "https://sts.windows.net/00000000-0000-0000-0000-000000000000/"
-  JWT_AUDIENCE: "api://00000000-0000-0000-0000-000000000000"
+  #
+  # Backend uses the v2.0 discovery endpoint (see authJwt.js line 27), so
+  # token issuer claim is the v2.0-form URL with the trailing /v2.0.
+  # JWT_AUDIENCE for v2.0 tokens is typically just the API app's clientId
+  # (no api:// prefix). If validation fails with "audience mismatch", flip
+  # to "api://af63b7cb-1958-4029-b50c-3f2c17655120" — depends on the API
+  # app manifest's accessTokenAcceptedVersion setting.
+  ENTRA_TENANT_ID: "487f7bd9-65ec-4967-83e5-94f06e11b6d1"
+  JWT_ISSUER: "https://login.microsoftonline.com/487f7bd9-65ec-4967-83e5-94f06e11b6d1/v2.0"
+  JWT_AUDIENCE: "af63b7cb-1958-4029-b50c-3f2c17655120"
 
   # App
   PORT: "5001"
+
+  # CORS — comma-separated allowlist consumed by backend/index.js.
+  # Entries: exact origin (https://host) or wildcard suffix (*.domain.tld).
+  # Add new front-end origins here, no code change / image rebuild required.
+  CORS_ALLOWED_ORIGINS: "http://localhost:3000,https://sqlinj.local,https://lab.oznetsecure.com.au,*.app.github.dev"
