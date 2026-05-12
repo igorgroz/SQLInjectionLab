@@ -7,6 +7,7 @@
 **/terraform.tfstate.*.backup
 **/tfplan
 **/tfplan-destroy
+**/*.tfplan
 **/*.tfvars
 **/*.tfvars.json
 
@@ -30,3 +31,4 @@ SQLInjproject.zip
 *.pem
 *.zip
 .cosign-home/
+zapoutput/
