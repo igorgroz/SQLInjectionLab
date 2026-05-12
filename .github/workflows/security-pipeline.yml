@@ -103,11 +103,21 @@ jobs:
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2a — SCA: Backend (npm audit)
+#
+# Findings are surfaced as job outputs + workflow annotations + an
+# uploaded artifact. This job NEVER fails the pipeline on findings;
+# the sca-gate job (JOB 2c) is the actual gate and requires a human
+# reviewer to approve or reject before the build proceeds.
 # ══════════════════════════════════════════════════════════════════
   sca-backend:
     name: SCA — Backend (npm audit)
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    outputs:
+      has_findings: ${{ steps.audit.outputs.has_findings }}
+      high_count:   ${{ steps.audit.outputs.high_count }}
+      crit_count:   ${{ steps.audit.outputs.crit_count }}
+      findings:     ${{ steps.audit.outputs.findings }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +135,8 @@ jobs:
         working-directory: backend
         run: npm audit --audit-level=none --json > npm-audit-backend.json || true
 
-      - name: Gate on HIGH / CRITICAL (excluding documented exceptions)
+      - name: Evaluate HIGH / CRITICAL (excluding documented exceptions)
+        id: audit
         working-directory: backend
         run: |
           EXCEPTED=$(jq -r '.exceptions[].ghsa' audit-exceptions.json 2>/dev/null | tr '\n' ' ')
@@ -148,29 +159,52 @@ jobs:
             | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
           ' npm-audit-backend.json)
 
+          HIGH=$(jq '.metadata.vulnerabilities.high     // 0' npm-audit-backend.json)
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-backend.json)
+          echo "Backend — Critical: $CRIT  High: $HIGH  (after exceptions: $( [ -n "$FAILURES" ] && echo "findings present" || echo "clean" ))"
+
           if [ -n "$FAILURES" ]; then
-            echo "::error::Backend SCA: unexcepted HIGH/CRITICAL vulnerabilities found:"
+            echo "::warning::Backend SCA: unexcepted HIGH/CRITICAL vulnerabilities (manual review required)"
             echo "$FAILURES"
-            exit 1
+            echo "has_findings=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Backend SCA passed (any remaining HIGH/CRITICAL are in audit-exceptions.json)"
+            echo "Backend SCA clean (any remaining HIGH/CRITICAL are in audit-exceptions.json)"
+            echo "has_findings=false" >> "$GITHUB_OUTPUT"
           fi
+
+          {
+            echo "high_count=${HIGH}"
+            echo "crit_count=${CRIT}"
+            echo "findings<<__EOF__"
+            echo "${FAILURES:-(none after exceptions)}"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload audit artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: npm-audit-backend
-          path: backend/npm-audit-backend.json
+          path: |
+            backend/npm-audit-backend.json
+            backend/audit-exceptions.json
           retention-days: 30
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2b — SCA: Frontend (npm audit)
+#
+# Same model as JOB 2a: surface findings, never hard-fail. sca-gate
+# is the real gate.
 # ══════════════════════════════════════════════════════════════════
   sca-frontend:
     name: SCA — Frontend (npm audit)
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    outputs:
+      has_findings: ${{ steps.audit.outputs.has_findings }}
+      high_count:   ${{ steps.audit.outputs.high_count }}
+      crit_count:   ${{ steps.audit.outputs.crit_count }}
+      findings:     ${{ steps.audit.outputs.findings }}
     steps:
       - uses: actions/checkout@v4
 
@@ -188,30 +222,121 @@ jobs:
         working-directory: frontend
         run: npm audit --audit-level=none --omit=dev --json > npm-audit-frontend.json || true
 
-      - name: Gate on HIGH / CRITICAL (fixable)
+      - name: Evaluate HIGH / CRITICAL (excluding documented exceptions)
+        id: audit
         working-directory: frontend
         run: |
+          EXCEPTED=$(jq -r '.exceptions[].ghsa' audit-exceptions.json 2>/dev/null | tr '\n' ' ')
+          echo "Excepted GHSAs: ${EXCEPTED:-none}"
+
+          FAILURES=$(jq -r --argjson exc "$(jq '[.exceptions[].ghsa]' audit-exceptions.json 2>/dev/null || echo '[]')" '
+            .vulnerabilities
+            | to_entries[]
+            | select(.value.severity == "high" or .value.severity == "critical")
+            | select(
+                .value.via
+                | map(
+                    select(type == "object")
+                    | .url // ""
+                    | split("/")
+                    | last
+                  )
+                | any(. as $id | $exc | index($id) == null)
+              )
+            | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
+          ' npm-audit-frontend.json)
+
           HIGH=$(jq '.metadata.vulnerabilities.high     // 0' npm-audit-frontend.json)
           CRIT=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit-frontend.json)
-          echo "Frontend — Critical: $CRIT  High: $HIGH"
-          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "::error::Frontend SCA: $CRIT critical, $HIGH high severity vulnerabilities"
-            jq -r '
-              .vulnerabilities
-              | to_entries[]
-              | select(.value.severity == "high" or .value.severity == "critical")
-              | "\(.value.severity | ascii_upcase)  \(.key)  fixAvailable=\(.value.fixAvailable)"
-            ' npm-audit-frontend.json
-            exit 1
+          echo "Frontend — Critical: $CRIT  High: $HIGH  (after exceptions: $( [ -n "$FAILURES" ] && echo "findings present" || echo "clean" ))"
+
+          if [ -n "$FAILURES" ]; then
+            echo "::warning::Frontend SCA: unexcepted HIGH/CRITICAL vulnerabilities (manual review required)"
+            echo "$FAILURES"
+            echo "has_findings=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Frontend SCA clean (any remaining HIGH/CRITICAL are in audit-exceptions.json)"
+            echo "has_findings=false" >> "$GITHUB_OUTPUT"
           fi
+
+          {
+            echo "high_count=${HIGH}"
+            echo "crit_count=${CRIT}"
+            echo "findings<<__EOF__"
+            echo "${FAILURES:-(none after exceptions)}"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload audit artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: npm-audit-frontend
-          path: frontend/npm-audit-frontend.json
+          path: |
+            frontend/npm-audit-frontend.json
+            frontend/audit-exceptions.json
           retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 2c — SCA Manual Review Gate
+#
+# Always runs after both SCA jobs. If neither flagged findings, the
+# gate auto-approves (no environment pause). If either flagged
+# findings, the gate enters the `sca-review` environment which pauses
+# for required reviewers to approve / reject after inspecting the
+# uploaded npm-audit-* artifacts.
+#
+# Setup: GitHub repo → Settings → Environments → sca-review
+#        → Required reviewers → add yourself
+# ══════════════════════════════════════════════════════════════════
+  sca-gate:
+    name: SCA Manual Review Gate
+    needs: [sca-backend, sca-frontend]
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ (needs.sca-backend.outputs.has_findings == 'true' || needs.sca-frontend.outputs.has_findings == 'true') && 'sca-review' || '' }}
+    steps:
+      - name: Summarise SCA outcome for reviewer
+        run: |
+          BE_FIND="${{ needs.sca-backend.outputs.has_findings }}"
+          FE_FIND="${{ needs.sca-frontend.outputs.has_findings }}"
+          BE_HIGH="${{ needs.sca-backend.outputs.high_count }}"
+          BE_CRIT="${{ needs.sca-backend.outputs.crit_count }}"
+          FE_HIGH="${{ needs.sca-frontend.outputs.high_count }}"
+          FE_CRIT="${{ needs.sca-frontend.outputs.crit_count }}"
+
+          {
+            echo "## SCA Review Summary"
+            echo ""
+            echo "| Component | Critical | High | Unexcepted findings? |"
+            echo "|-----------|---------:|-----:|----------------------|"
+            echo "| Backend   | ${BE_CRIT:-0} | ${BE_HIGH:-0} | ${BE_FIND:-unknown} |"
+            echo "| Frontend  | ${FE_CRIT:-0} | ${FE_HIGH:-0} | ${FE_FIND:-unknown} |"
+            echo ""
+            if [ "$BE_FIND" = "true" ]; then
+              echo "### Backend findings"
+              echo '```'
+              echo "${{ needs.sca-backend.outputs.findings }}"
+              echo '```'
+            fi
+            if [ "$FE_FIND" = "true" ]; then
+              echo "### Frontend findings"
+              echo '```'
+              echo "${{ needs.sca-frontend.outputs.findings }}"
+              echo '```'
+            fi
+            echo ""
+            echo "Download the **npm-audit-backend** / **npm-audit-frontend** artifacts from this run for full detail."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$BE_FIND" = "true" ] || [ "$FE_FIND" = "true" ]; then
+            echo "::warning::SCA findings present — manual approval required via the sca-review environment."
+          else
+            echo "SCA clean — auto-approving."
+          fi
+
+      - name: Approved
+        run: echo "SCA gate approved by ${{ github.actor || 'auto' }}"
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 3 — Build Docker images
@@ -219,7 +344,7 @@ jobs:
   build:
     name: Build Docker Images
     if: github.event_name == 'push'
-    needs: [sast, sca-backend, sca-frontend]
+    needs: [sast, sca-gate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,5 @@
+{
+  "_comment": "SCA exceptions — CVEs accepted as known risk with justification. Mirror of backend/audit-exceptions.json. Each entry must include a GHSA id, severity, business/technical justification, and (if applicable) a fix ticket / review date. The frontend npm-audit gate skips findings whose .via[].url ends with a listed GHSA id.",
+  "_review_date": "2026-07-01",
+  "exceptions": []
+}
