@@ -13,12 +13,16 @@
 # They are completely independent state files.
 # =============================================================================
 
+# State locking now uses S3-native conditional writes (use_lockfile, GA in
+# AWS provider 5.83+) instead of a DynamoDB table. One fewer resource to
+# manage and pay for, no IAM grant on a table needed. The lock manifests
+# as a sibling `<key>.tflock` object next to the state file inside the bucket.
 terraform {
   backend "s3" {
-    bucket         = "sqlinj-tfstate-510151297987"
-    key            = "infra-lab/terraform.tfstate"
-    region         = "ap-southeast-2"
-    dynamodb_table = "sqlinj-tfstate-lock"
-    encrypt        = true
+    bucket       = "sqlinj-tfstate-510151297987"
+    key          = "infra-lab/terraform.tfstate"
+    region       = "ap-southeast-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }

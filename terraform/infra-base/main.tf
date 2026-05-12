@@ -91,19 +91,11 @@ data "aws_iam_policy_document" "codebuild_tfstate" {
     ]
   }
 
-  statement {
-    sid    = "TerraformStateLock"
-    effect = "Allow"
-    actions = [
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:DescribeTable",
-    ]
-    resources = [
-      "arn:aws:dynamodb:${local.region}:${local.account_id}:table/sqlinj-tfstate-lock"
-    ]
-  }
+  # NOTE: previously a "TerraformStateLock" statement granted dynamodb:*
+  # against sqlinj-tfstate-lock. Removed when both stacks moved to S3-native
+  # locking via use_lockfile (see backend.tf). The lock object is now a
+  # sibling of the state file inside the same S3 bucket — the
+  # TerraformStateBucket statement above already covers it.
 
   statement {
     sid    = "CloudWatchLogs"

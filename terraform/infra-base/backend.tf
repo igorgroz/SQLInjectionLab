@@ -8,8 +8,10 @@
 #   - Local state (terraform.tfstate on your filesystem) is lost when you
 #     switch machines and can't be shared or locked.
 #   - S3 provides durable, versioned, encrypted storage.
-#   - DynamoDB provides optimistic locking — prevents two concurrent applies
-#     from corrupting state if you're ever running from two places.
+#   - State locking via S3 conditional writes (use_lockfile, GA in AWS
+#     provider 5.83+) prevents two concurrent applies from corrupting state.
+#     This replaces the older DynamoDB lock-table pattern — one fewer
+#     resource to manage, no IAM grants on a side table.
 #
 # Why separate state keys?
 #   - infra-base/terraform.tfstate  → permanent infrastructure
@@ -25,10 +27,10 @@
 
 terraform {
   backend "s3" {
-    bucket         = "sqlinj-tfstate-510151297987"
-    key            = "infra-base/terraform.tfstate"
-    region         = "ap-southeast-2"
-    dynamodb_table = "sqlinj-tfstate-lock"
-    encrypt        = true
+    bucket       = "sqlinj-tfstate-510151297987"
+    key          = "infra-base/terraform.tfstate"
+    region       = "ap-southeast-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }

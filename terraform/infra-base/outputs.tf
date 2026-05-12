@@ -7,10 +7,8 @@ output "state_bucket_name" {
   value       = local.state_bucket
 }
 
-output "state_lock_table" {
-  description = "Name of the DynamoDB table used for Terraform state locking"
-  value       = "sqlinj-tfstate-lock"
-}
+# State locking moved to S3-native conditional writes (use_lockfile) — the
+# DynamoDB table is gone; no more `state_lock_table` output to emit.
 
 output "codebuild_project_name" {
   description = "Name of the CodeBuild project for nightly infra-lab destroy"
