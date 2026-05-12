@@ -4,9 +4,11 @@
 > Keep it under ~80 lines. Detailed runbooks live in PHASE*.md.
 
 ## Current phase
-**3b-4 — functionally complete + pipeline hardening.** Full stack stands up
-on EKS end-to-end. Pipeline SCA gate now manual-review based (mirroring DAST).
-Lab itself still destroyed from previous session.
+**3b-4 — functionally complete + pipeline hardening + HTTPS.** Full stack
+stands up on EKS, ALB serves HTTPS:443 with ACM cert + ELBSecurityPolicy-
+TLS13-1-2-2021-06, HTTP:80 issues 301→HTTPS, ALB ingress allowlisted to
+the operator's residential /32. Pipeline SCA gate now manual-review based
+(mirroring DAST). Lab is **UP** at https://lab.oznetsecure.com.au.
 
 ## Last commit
 `cee8747 feat(cors): make allowlist configurable via CORS_ALLOWED_ORIGINS env` (May 11 2026)
@@ -26,6 +28,17 @@ Lab itself still destroyed from previous session.
   scaffold (empty), so future accepted CVEs follow the same documented model
   as `backend/audit-exceptions.json` (GHSA id + severity + justification +
   fix ticket / review date).
+- **HTTPS at the ALB.** `k8s/ingress.yaml` now wires the ACM cert
+  (`b541a915-…` in ap-southeast-2), listen-ports `[{HTTP:80},{HTTPS:443}]`,
+  `ssl-redirect: 443`, `ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06`.
+  Closes open issue #3.
+- **Lab ingress lockdown.** `alb.ingress.kubernetes.io/inbound-cidrs`
+  annotation pins ALB SG ingress to operator /32 — ALBC manages it, so
+  manual SG edits no longer get reverted (open issue #7).
+- **ECR re-population from GHCR.** Lab destroy wiped ECR; mirrored the
+  `f814ac7` backend + frontend images from GHCR via `crane`. Deployments
+  bumped to that SHA — first end-to-end run where the image deployed
+  matches what the pipeline signed (no more manual-push drift).
 
 ## Open issues
 1. **ALBC vpcId auto-discovery still hard-pinned** — IMDS `httpPutResponseHopLimit=1`.
@@ -35,17 +48,24 @@ Lab itself still destroyed from previous session.
 2. **CORS-fix image is unsigned** — pushed manually, bypassed the cosign step
    in `.github/workflows/security-pipeline.yml`. Fine while admission policy
    isn't enforced; must be signed before a Kyverno/cosigned policy goes in.
-3. **Ingress TLS not yet codified** — ACM cert for `lab.oznetsecure.com.au`
-   exists in ap-southeast-2 (created manually this session, do NOT delete), but
-   `k8s/ingress.yaml` still declares HTTP 80 only. Next deploy: add
-   `alb.ingress.kubernetes.io/certificate-arn: <ARN>`,
-   `alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'`,
-   and `alb.ingress.kubernetes.io/ssl-redirect: '443'`. Record the ARN in
-   `LAB_SECURITY_DECISIONS.md` once captured.
-4. **`sca-review` GitHub environment not yet configured** — repo →
-   Settings → Environments → New environment `sca-review` → Required
-   reviewers: add yourself. Without this, the gate auto-passes on
-   findings (because the env name resolves but has no protection rules).
+3. **(closed)** Ingress TLS codified — see Resolved this session.
+4. **`sca-review` GitHub environment** — configured this session (required
+   reviewer = self). Documented for traceability.
+5. **Backend uses deprecated `dynamodb_table` for S3 state locking** —
+   `terraform/infra-lab/backend.tf` (and likely `terraform/infra-base/`).
+   Replace with `use_lockfile = true` (S3-native conditional-write lock,
+   GA in AWS provider 5.83+). Once swapped, the lock table in
+   `infra-base` can be destroyed. Non-blocking warning today.
+6. **ECR repos are in `infra-lab` and get destroyed nightly** — every
+   morning we re-mirror images from GHCR. Two options: (a) move the
+   `aws_ecr_repository` resources to `infra-base` so they survive; or
+   (b) switch the cluster to pull from GHCR directly with an
+   `imagePullSecret`. Either kills the daily mirror dance.
+7. **ALB allowlist tied to a single residential IP** — `inbound-cidrs`
+   in `k8s/ingress.yaml` pins 112.213.131.214/32. Breaks the moment the
+   IP rotates. Mitigations: add a `bin/whitelist-me.sh` helper, or
+   move to AWS Verified Access / a tiny WireGuard endpoint for a more
+   robust lab access pattern.
 
 ## Uncommitted / untracked
 - M `helm/alb-controller/values.yaml` — vpcId workaround (keep until #1 lands)
@@ -55,10 +75,12 @@ Lab itself still destroyed from previous session.
 - ?? `test.json`, root-level `package-lock.json` — investigate / .gitignore
 
 ## Next actions (pick one)
-1. Codify the ACM cert + HTTPS listener in `k8s/ingress.yaml`; remove the
-   HTTP-only comment block.
-2. Fix the node-group hop-limit in Terraform and drop the vpcId pin.
-3. Commit the in-flight terraform files (ebs-csi.tf, cluster-bootstrap.tf).
+1. Move `aws_ecr_repository` into `infra-base` so images survive nightly
+   destroys (kills the GHCR→ECR mirror dance — open issue #6).
+2. Fix the node-group hop-limit in Terraform and drop the vpcId pin
+   (open issue #1).
+3. Swap S3 backend `dynamodb_table` for `use_lockfile = true`, destroy
+   the lock table (open issue #5).
 4. (Phase 4 prep) EKS KMS envelope encryption for etcd Secrets.
 
 ## Lab teardown state

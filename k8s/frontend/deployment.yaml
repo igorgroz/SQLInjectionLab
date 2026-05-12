@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-frontend:6113a7de7cc994a44c87335b77886709807304e4
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-frontend:f814ac7a93cef1e0619c456193c93c13d4cda863
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080  # nginx-unprivileged listens on 8080 (non-root)
