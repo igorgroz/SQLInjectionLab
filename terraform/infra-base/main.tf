@@ -284,3 +284,31 @@ resource "aws_cloudwatch_event_target" "codebuild_destroy" {
   arn       = aws_codebuild_project.nightly_destroy.arn
   role_arn  = aws_iam_role.eventbridge_codebuild.arn
 }
+
+# =============================================================================
+# ECR — moved here from infra-lab so repos + their images survive the nightly
+# destroy of infra-lab. Previously every teardown wiped these (force_delete=
+# true on the repo + terraform destroy → empty repos → morning re-mirror
+# from GHCR). Now infra-base owns the repos; infra-lab only consumes their
+# URLs via k8s manifests (which already hardcode the registry hostname).
+# Closes open issue #6.
+# =============================================================================
+module "ecr" {
+  source = "./modules/ecr"
+
+  cluster_name = "sqlinj-eks"   # tagging only — repos themselves are stack-agnostic
+
+  repositories = {
+    "sqlinj-frontend" = {
+      image_tag_mutability = "IMMUTABLE"
+      scan_on_push         = true
+    }
+    "sqlinj-backend" = {
+      image_tag_mutability = "IMMUTABLE"
+      scan_on_push         = true
+    }
+  }
+
+  lifecycle_untagged_days = 1
+  lifecycle_tagged_count  = 10
+}

@@ -64,28 +64,11 @@ module "eks" {
 }
 
 # =============================================================================
-# ECR — Container registries
+# ECR — moved to infra-base (closes issue #6)
 # =============================================================================
-
-module "ecr" {
-  source = "./modules/ecr"
-
-  cluster_name = var.cluster_name
-
-  repositories = {
-    "sqlinj-frontend" = {
-      image_tag_mutability = "IMMUTABLE"
-      scan_on_push         = true
-    }
-    "sqlinj-backend" = {
-      image_tag_mutability = "IMMUTABLE"
-      scan_on_push         = true
-    }
-  }
-
-  lifecycle_untagged_days = 1
-  lifecycle_tagged_count  = 10
-}
+# The repos + their images now survive the nightly destroy of infra-lab.
+# See terraform/infra-base/main.tf module "ecr". K8s manifests reference
+# the registry hostname directly, so no consumer wiring is needed here.
 
 # =============================================================================
 # EKS Admin Access — grant kubectl access to the Terraform operator

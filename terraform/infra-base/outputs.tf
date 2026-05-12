@@ -29,3 +29,15 @@ output "eventbridge_rule_state" {
   description = "Current state of the nightly destroy rule (ENABLED/DISABLED)"
   value       = aws_cloudwatch_event_rule.nightly_destroy.state
 }
+
+# ─── ECR (moved from infra-lab, see main.tf) ─────────────────────────────────
+
+output "ecr_repository_urls" {
+  description = "ECR repository URLs — paste into K8s manifests' image: fields"
+  value       = module.ecr.repository_urls
+}
+
+output "ecr_docker_login_command" {
+  description = "Authenticate Docker to ECR"
+  value       = module.ecr.docker_login_command
+}

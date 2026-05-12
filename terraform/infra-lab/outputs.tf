@@ -50,16 +50,9 @@ output "nat_public_ips" {
 }
 
 # ─── ECR ─────────────────────────────────────────────────────────────────────
-
-output "ecr_repository_urls" {
-  description = "ECR repository URLs — update image: fields in K8s manifests with these"
-  value       = module.ecr.repository_urls
-}
-
-output "ecr_docker_login_command" {
-  description = "Authenticate Docker to ECR"
-  value       = module.ecr.docker_login_command
-}
+# ECR repos live in infra-base now (issue #6). Get the URLs / login command
+# via:  terraform -chdir=terraform/infra-base output -raw ecr_repository_urls
+#       terraform -chdir=terraform/infra-base output -raw ecr_docker_login_command
 
 # ─── IRSA / Secrets Manager ──────────────────────────────────────────────────
 
@@ -121,9 +114,9 @@ output "next_steps" {
     4. Enable the nightly destroy rule when ready:
        aws events enable-rule --name sqlinj-nightly-destroy
 
-    5. Update backend K8s manifests with ECR image URLs:
-       Frontend: ${lookup(module.ecr.repository_urls, "sqlinj-frontend", "not-yet-created")}
-       Backend:  ${lookup(module.ecr.repository_urls, "sqlinj-backend", "not-yet-created")}
+    5. ECR image URLs (repos live in infra-base now, persist across teardowns):
+       Frontend: ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sqlinj-frontend
+       Backend:  ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sqlinj-backend
 
     ============================================================
   EOT
