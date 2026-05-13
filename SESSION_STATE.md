@@ -13,36 +13,37 @@ end of session.
 ## Last commit
 `7a34af5 refactor(tf): move ECR repos from infra-lab to infra-base` (May 12 2026)
 
-## Resolved this session
-- **Frontend SCA `fast-uri` HIGH** — `overrides: { fast-uri: ^3.1.2 }` in
-  `frontend/package.json`; `npm audit --omit=dev` now 0/0/0/0/0.
-- **SCA gate → manual review.** `sca-backend` / `sca-frontend` emit
-  `has_findings` outputs; `sca-gate` enters the `sca-review` environment
-  if findings present, else auto-approves. `build` depends on `sca-gate`.
-- **Frontend audit-exceptions parity** — empty `frontend/audit-exceptions.json`
-  scaffold mirroring `backend/audit-exceptions.json`.
-- **HTTPS at the ALB** — ACM cert wired, HTTP→HTTPS 301,
-  `ELBSecurityPolicy-TLS13-1-2-2021-06`. Closes #3.
-- **Lab ingress lockdown** — `inbound-cidrs` annotation pins SG to operator
-  /32; ALBC manages it (no more manual SG drift). `bin/whitelist-me.sh`
-  auto-detects current public IP and patches the annotation. Partially
-  mitigates #7.
-- **ECR images recovered** — mirrored `f814ac7` from GHCR via crane; first
-  deploy where running image matches what the pipeline signed.
-- **S3-native state locking** — `dynamodb_table → use_lockfile = true` on
-  both stacks. DDB lock table deleted, IAM policy + dangling output
-  cleaned up. Closes #5.
-- **Promoted `cluster-bootstrap.tf` + `ebs-csi.tf`** to git; `**/*.tfplan`
-  in `.gitignore`. Closes the "untracked in-flight TF" item.
-- **ECR repos moved to `infra-base`** — 6 state imports, 1 state rm. No
-  AWS-side recreate. Repos + images now survive `infra-lab` destroys.
-  Closes #6.
+## Resolved this session (closes #3, #5, #6 + untracked-TF)
+- Frontend SCA `fast-uri` HIGH cleared via `overrides` in package.json.
+- SCA pipeline → manual-review gate (`sca-review` env). Frontend
+  `audit-exceptions.json` scaffold mirrors backend.
+- HTTPS at the ALB (ACM cert, TLS 1.3/1.2 policy, HTTP→301).
+- ALB inbound-cidrs pinned to operator /32; `bin/whitelist-me.sh` auto-
+  patches on IP rotation.
+- ECR images mirrored from GHCR (`f814ac7`), first deploy where running
+  image matches pipeline-signed image.
+- `use_lockfile = true` on both backends; DDB lock table deleted.
+- Promoted `cluster-bootstrap.tf` + `ebs-csi.tf` to git; `**/*.tfplan`
+  gitignored.
+- ECR repos moved to `infra-base` (6 state imports, 1 state rm; no
+  AWS-side recreate).
 
 ## Open issues
-1. **ALBC vpcId auto-discovery still hard-pinned** — IMDS hop limit = 1.
-   Fix: `metadata_options { http_put_response_hop_limit = 2 }` on the
-   node-group launch template; drop the workaround from
-   `helm/alb-controller/values.yaml`.
+1. **ALBC vpcId requires manual `--set` every cluster recreate.** Root
+   cause: node-group launch template ships `http_put_response_hop_limit=1`
+   (EKS default, hardens pod→IMDS-credential-theft), but the VPC CNI
+   namespace traversal counts as one hop, so the IMDSv2 token response
+   never reaches pods. ALBC can't auto-discover vpcId, hence the helm
+   `--set vpcId="$(tf output -raw vpc_id)"` workaround.
+   - **Don't just bump to hop_limit=2.** That re-opens pod→IMDS for the
+     whole node group. Only safe if `http_tokens="required"` (IMDSv2
+     enforced) AND NetworkPolicy denies pod egress to
+     `169.254.169.254/32` in `sqlinj` (and any future app namespace).
+   - **Preferred fix:** generate a `cluster-info` ConfigMap from
+     terraform (`module.vpc.vpc_id`) and point ALBC's helm values at it
+     via env-var substitution. Same UX as IMDS auto-discovery, value
+     flows through cluster state instead of IMDS, no hop_limit change,
+     generalises to any other pod that needs to know its VPC.
 2. **(closed)** CORS-fix image unsigned — current `f814ac7` is the first
    pipeline-signed image actually deployed.
 3. **(closed)** Ingress TLS codified.
@@ -56,10 +57,10 @@ end of session.
    authed ECR push job to `security-pipeline.yml`; further out, Argo
    Image Updater or similar for end-to-end automation.
 
-## Uncommitted / untracked (housekeeping pile)
-- M `helm/alb-controller/values.yaml` — vpcId workaround (keep until #1)
-- M `.DS_Store`, `backend/backend_dev_notes.md` — drift, ignore
-- ?? `CLAUDE.md`, root `package-lock.json`, `test.json` — decide+commit/gitignore
+## Housekeeping pile
+M `helm/alb-controller/values.yaml` (keep until #1). Drift/junk to
+decide on next pass: `.DS_Store`, `backend/backend_dev_notes.md`,
+`CLAUDE.md`, root `package-lock.json`, `test.json`.
 
 ## Next actions (pick one)
 1. Add ECR push to `security-pipeline.yml` (closes #8 cheap fix path).
@@ -69,10 +70,9 @@ end of session.
 4. (Phase 4 prep) EKS KMS envelope encryption for etcd Secrets.
 
 ## Lab teardown state
-**Destroyed at session end.** `terraform -chdir=terraform/infra-lab destroy`
-removed the ~65 lab resources. Preserved in `infra-base`: state backend,
-nightly-destroy CodeBuild, **ECR repos with `f814ac7` images**, AWS Secrets
-Manager entries, ACM cert for `lab.oznetsecure.com.au`, Route 53 zone.
+**Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy
+CodeBuild, **ECR repos with `f814ac7` images**, AWS SM entries, ACM cert,
+Route 53 zone. Tomorrow's spin-up has working images already in ECR.
 
 ## Key paths
 - Phase docs: `PHASE2.md`, `PHASE3B3.md`
