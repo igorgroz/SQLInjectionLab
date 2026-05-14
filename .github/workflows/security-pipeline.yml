@@ -41,10 +41,20 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
+    outputs:
+      has_findings: ${{ steps.evaluate.outputs.has_findings }}
+      error_count:  ${{ steps.evaluate.outputs.error_count }}
+      warn_count:   ${{ steps.evaluate.outputs.warn_count }}
+      findings:     ${{ steps.evaluate.outputs.findings }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Semgrep
+        # NOTE: --error removed. This codebase contains deliberately vulnerable
+        # routes (insecure-users, addInsecureCloth) for the SQLi demo; p/sql-
+        # injection legitimately flags them every run. Hard-failing on any
+        # finding turned the pipeline permanently red. Findings now flow
+        # through the sast-gate job for review-with-attestation instead.
         run: |
           semgrep scan \
             --config p/javascript \
@@ -54,7 +64,6 @@ jobs:
             --config p/sql-injection \
             --sarif \
             --output semgrep.sarif \
-            --error \
             .
 
       - name: Ensure SARIF exists
@@ -64,22 +73,19 @@ jobs:
             echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
           fi
 
-      - name: Annotate findings in Actions log
+      - name: Annotate findings + emit outputs
+        id: evaluate
         if: always()
         run: |
           python3 - <<'EOF'
-          import json, sys, os
-          sarif_path = "semgrep.sarif"
-          if not os.path.exists(sarif_path):
-              print("No SARIF file to annotate")
-              sys.exit(0)
-          with open(sarif_path) as f:
+          import json, os
+          with open("semgrep.sarif") as f:
               sarif = json.load(f)
-          count = 0
+          err, warn, lines = 0, 0, []
           for run in sarif.get("runs", []):
               for result in run.get("results", []):
                   level  = result.get("level", "warning")
-                  msg    = result["message"]["text"].replace("\n", " ")[:200]
+                  msg    = result["message"]["text"].replace("\n", " ")[:160]
                   rule   = result.get("ruleId", "unknown-rule")
                   for loc in result.get("locations", []):
                       try:
@@ -87,11 +93,21 @@ jobs:
                           line = loc["physicalLocation"]["region"]["startLine"]
                           gh   = "error" if level == "error" else "warning"
                           print(f"::{gh} file={uri},line={line}::[{rule}] {msg}")
-                          count += 1
+                          if level == "error": err += 1
+                          else: warn += 1
+                          lines.append(f"{level.upper():7s} {rule}  {uri}:{line}")
                       except (KeyError, IndexError):
                           pass
-          if count == 0:
-              print("No findings — SAST clean")
+          has_findings = "true" if (err + warn) > 0 else "false"
+          print(f"\nSAST result: error={err}  warn={warn}")
+          out = os.environ["GITHUB_OUTPUT"]
+          with open(out, "a") as f:
+              f.write(f"has_findings={has_findings}\n")
+              f.write(f"error_count={err}\n")
+              f.write(f"warn_count={warn}\n")
+              f.write("findings<<__EOF__\n")
+              f.write("\n".join(lines[:50]) if lines else "(none)")
+              f.write("\n__EOF__\n")
           EOF
 
       - name: Upload SARIF → GitHub Security
@@ -100,6 +116,67 @@ jobs:
         with:
           sarif_file: semgrep.sarif
           category: semgrep
+
+      - name: Upload SARIF artifact (for sast-gate consumption)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 1b — SAST Manual Review Gate
+#
+# Same shape as sca-gate. If SAST flagged any finding, this enters
+# the `sast-review` environment for required-reviewer approval.
+# Otherwise auto-approves.
+# ══════════════════════════════════════════════════════════════════
+  sast-gate:
+    name: SAST Manual Review Gate
+    needs: sast
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.sast.outputs.has_findings == 'true' && 'sast-review' || '' }}
+    outputs:
+      decision: ${{ steps.record.outputs.decision }}
+    steps:
+      - name: Summarise SAST outcome for reviewer
+        run: |
+          ERR="${{ needs.sast.outputs.error_count }}"
+          WARN="${{ needs.sast.outputs.warn_count }}"
+          {
+            echo "## SAST Review Summary"
+            echo ""
+            echo "| level | count |"
+            echo "|-------|------:|"
+            echo "| error   | ${ERR:-0}  |"
+            echo "| warning | ${WARN:-0} |"
+            echo ""
+            if [ "${{ needs.sast.outputs.has_findings }}" = "true" ]; then
+              echo "### Findings"
+              echo '```'
+              echo "${{ needs.sast.outputs.findings }}"
+              echo '```'
+              echo ""
+              echo "_Approving here will write a 'sast: accepted' entry into the_"
+              echo "_vuln-signoff/v1 cosign attestation attached to the pushed image._"
+              echo "_Lab admission policy accepts it; prod admission policy refuses it._"
+            else
+              echo "SAST clean — auto-approving."
+            fi
+            echo ""
+            echo "Download the **semgrep-sarif** artifact for the full SARIF."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record decision
+        id: record
+        run: |
+          if [ "${{ needs.sast.outputs.has_findings }}" = "true" ]; then
+            echo "decision=accepted" >> "$GITHUB_OUTPUT"
+          else
+            echo "decision=clean" >> "$GITHUB_OUTPUT"
+          fi
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 2a — SCA: Backend (npm audit)
@@ -295,6 +372,8 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ (needs.sca-backend.outputs.has_findings == 'true' || needs.sca-frontend.outputs.has_findings == 'true') && 'sca-review' || '' }}
+    outputs:
+      decision: ${{ steps.record.outputs.decision }}
     steps:
       - name: Summarise SCA outcome for reviewer
         run: |
@@ -335,8 +414,15 @@ jobs:
             echo "SCA clean — auto-approving."
           fi
 
-      - name: Approved
-        run: echo "SCA gate approved by ${{ github.actor || 'auto' }}"
+      - name: Record decision
+        id: record
+        run: |
+          if [ "${{ needs.sca-backend.outputs.has_findings }}" = "true" ] || \
+             [ "${{ needs.sca-frontend.outputs.has_findings }}" = "true" ]; then
+            echo "decision=accepted" >> "$GITHUB_OUTPUT"
+          else
+            echo "decision=clean" >> "$GITHUB_OUTPUT"
+          fi
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 3 — Build Docker images
@@ -344,7 +430,7 @@ jobs:
   build:
     name: Build Docker Images
     if: github.event_name == 'push'
-    needs: [sast, sca-gate]
+    needs: [sast-gate, sca-gate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -397,6 +483,11 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      has_findings: ${{ steps.evaluate.outputs.has_findings }}
+      crit_count:   ${{ steps.evaluate.outputs.crit_count }}
+      high_count:   ${{ steps.evaluate.outputs.high_count }}
+      findings:     ${{ steps.evaluate.outputs.findings }}
     steps:
       - uses: actions/checkout@v4
 
@@ -427,7 +518,11 @@ jobs:
           build-args: |
             BUILDDATE=${{ github.run_id }}
 
-      - name: Trivy — log frontend findings (table, no gate)
+      # Trivy now runs in JSON mode for parsing + table mode for the log.
+      # exit-code: 0 — no hard fail. The trivy-gate job (JOB 4b) is the
+      # decision point, mirroring SCA's manual-review pattern.
+
+      - name: Trivy — frontend (table, log)
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
@@ -440,7 +535,7 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Trivy — log backend findings (table, no gate)
+      - name: Trivy — backend (table, log)
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
@@ -453,41 +548,152 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Trivy — scan frontend (gate)
-        id: trivy_frontend
+      - name: Trivy — frontend (JSON, for parsing)
+        if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          format: table
+          format: json
+          output: trivy-frontend.json
           scanners: vuln
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Trivy — scan backend (gate)
-        id: trivy_backend
+      - name: Trivy — backend (JSON, for parsing)
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          format: table
+          format: json
+          output: trivy-backend.json
           scanners: vuln
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           trivyignores: .trivyignore
 
-      - name: Fail if either Trivy scan failed
+      - name: Evaluate Trivy findings (minus exceptions)
+        id: evaluate
         if: always()
         run: |
-          echo "Frontend outcome: ${{ steps.trivy_frontend.outcome }}"
-          echo "Backend outcome:  ${{ steps.trivy_backend.outcome }}"
-          if [ "${{ steps.trivy_frontend.outcome }}" = "failure" ] || [ "${{ steps.trivy_backend.outcome }}" = "failure" ]; then
-            echo "::error::One or more Trivy scans failed"
-            exit 1
+          # Build a regex of excepted CVE IDs from trivy-exceptions.json. The
+          # exceptions file accepts either `cve` or `id` as the field name —
+          # keep it forgiving since the SCA exceptions use different keys.
+          EXC=$(jq -r '[.exceptions[] | (.cve // .id) // empty] | join("|")' trivy-exceptions.json 2>/dev/null || echo "")
+          echo "Excepted CVE pattern: ${EXC:-(none)}"
+
+          # Single jq pass per image: filter to HIGH/CRITICAL minus exceptions,
+          # emit one line per finding. Count derived from line count.
+          extract () {
+            local file="$1" label="$2"
+            [ -s "$file" ] || { echo ""; return; }
+            jq -r --arg exc "$EXC" --arg label "$label" '
+              [ .Results[]?.Vulnerabilities[]?
+                | select(
+                    (.Severity == "HIGH" or .Severity == "CRITICAL") and
+                    ($exc == "" or (.VulnerabilityID | test("^(" + $exc + ")$") | not))
+                  )
+              ]
+              | .[:20]
+              | map("\($label)  \(.Severity)  \(.VulnerabilityID)  \(.PkgName)@\(.InstalledVersion) → \(.FixedVersion // "no-fix")")
+              | join("\n")
+            ' "$file"
+          }
+
+          FE_LINES=$(extract trivy-frontend.json FRONTEND)
+          BE_LINES=$(extract trivy-backend.json  BACKEND)
+
+          count () {
+            local file="$1" sev="$2"
+            [ -s "$file" ] || { echo 0; return; }
+            jq -r --arg exc "$EXC" --arg sev "$sev" '
+              [ .Results[]?.Vulnerabilities[]?
+                | select(.Severity == $sev and
+                    ($exc == "" or (.VulnerabilityID | test("^(" + $exc + ")$") | not)))
+              ] | length
+            ' "$file"
+          }
+
+          FE_CRIT=$(count trivy-frontend.json CRITICAL)
+          FE_HIGH=$(count trivy-frontend.json HIGH)
+          BE_CRIT=$(count trivy-backend.json  CRITICAL)
+          BE_HIGH=$(count trivy-backend.json  HIGH)
+
+          TOTAL=$((FE_CRIT + FE_HIGH + BE_CRIT + BE_HIGH))
+          echo "Trivy unexcepted findings — FE: $FE_CRIT crit / $FE_HIGH high   BE: $BE_CRIT crit / $BE_HIGH high"
+
+          {
+            echo "has_findings=$([ $TOTAL -gt 0 ] && echo true || echo false)"
+            echo "crit_count=$((FE_CRIT + BE_CRIT))"
+            echo "high_count=$((FE_HIGH + BE_HIGH))"
+            echo "findings<<__EOF__"
+            printf '%s\n' "$FE_LINES" "$BE_LINES" | sed '/^$/d'
+            [ -z "$FE_LINES" ] && [ -z "$BE_LINES" ] && echo "(none after exceptions)"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Trivy artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-reports
+          path: |
+            trivy-frontend.json
+            trivy-backend.json
+            trivy-exceptions.json
+          retention-days: 30
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 4b — Trivy Manual Review Gate
+#
+# Same pattern as sca-gate / sast-gate. Trivy findings on either
+# image (after subtracting exceptions in trivy-exceptions.json) put
+# the gate into the `trivy-review` environment. Clean = auto-approve.
+# ══════════════════════════════════════════════════════════════════
+  trivy-gate:
+    name: Trivy Manual Review Gate
+    needs: container-scan
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.container-scan.outputs.has_findings == 'true' && 'trivy-review' || '' }}
+    outputs:
+      decision: ${{ steps.record.outputs.decision }}
+    steps:
+      - name: Summarise Trivy outcome
+        run: |
+          CRIT="${{ needs.container-scan.outputs.crit_count }}"
+          HIGH="${{ needs.container-scan.outputs.high_count }}"
+          {
+            echo "## Trivy Review Summary"
+            echo ""
+            echo "| Critical | High | Unexcepted findings? |"
+            echo "|---------:|-----:|----------------------|"
+            echo "| ${CRIT:-0} | ${HIGH:-0} | ${{ needs.container-scan.outputs.has_findings }} |"
+            echo ""
+            if [ "${{ needs.container-scan.outputs.has_findings }}" = "true" ]; then
+              echo "### Findings (unexcepted, top 20)"
+              echo '```'
+              echo "${{ needs.container-scan.outputs.findings }}"
+              echo '```'
+              echo ""
+              echo "Add CVE IDs to **trivy-exceptions.json** to suppress known-accepted issues."
+              echo "Approving here writes 'trivy: accepted' into the vuln-signoff attestation."
+            else
+              echo "Trivy clean — auto-approving."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record decision
+        id: record
+        run: |
+          if [ "${{ needs.container-scan.outputs.has_findings }}" = "true" ]; then
+            echo "decision=accepted" >> "$GITHUB_OUTPUT"
+          else
+            echo "decision=clean" >> "$GITHUB_OUTPUT"
           fi
 
 # ══════════════════════════════════════════════════════════════════
@@ -495,7 +701,7 @@ jobs:
 # ══════════════════════════════════════════════════════════════════
   push-and-sign:
     name: Push & Sign (Cosign keyless)
-    needs: container-scan
+    needs: trivy-gate
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -918,42 +1124,212 @@ jobs:
   dast-gate:
     name: DAST Manual Review Gate
     needs: dast
-    if: always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    # Only run if DAST itself actually executed. Previously `if: always()`
+    # meant the gate ran even when DAST was skipped (e.g. SAST failed and
+    # cascaded), then auto-passed on empty outputs — that was the
+    # "approved" green tick on yesterday's failed run despite DAST never
+    # having scanned anything. The explicit success check makes the gate
+    # honest: no DAST run → no DAST approval.
+    if: needs.dast.result == 'success' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    # ── Environment protection rule ───────────────────────────────
-    # Pauses here and notifies required reviewers. The reviewer should:
-    #   1. Download the zap-api-evidence artifact from the DAST job
-    #   2. Review the findings
-    #   3. Approve to continue or reject to block the pipeline
-    #
-    # Setup: GitHub repo → Settings → Environments → dast-review
-    #        → Required reviewers → add yourself
-    environment: dast-review
+    # `findings` status puts us into the `dast-review` env for manual
+    # approval; clean DAST scans auto-pass with no env attached.
+    environment: ${{ needs.dast.outputs.zap_fail_alerts_present == 'true' && 'dast-review' || '' }}
+    outputs:
+      decision: ${{ steps.record.outputs.decision }}
     steps:
       - name: Report ZAP outcome to reviewer
         run: |
           ZAP_OUTCOME="${{ needs.dast.outputs.zap_outcome }}"
           ZAP_SCAN_STATUS="${{ needs.dast.outputs.zap_scan_status }}"
-          ZAP_REPORT_EXISTS="${{ needs.dast.outputs.zap_report_exists }}"
           ZAP_FAIL_ALERTS_PRESENT="${{ needs.dast.outputs.zap_fail_alerts_present }}"
 
-          if [ "$ZAP_SCAN_STATUS" = "findings" ]; then
-            echo "::warning::ZAP found FAIL-level alerts. You are approving with known findings."
-            echo "Review the zap-api-evidence artifact before approving."
-            if [ "$ZAP_REPORT_EXISTS" = "true" ]; then
-              echo "The artifact includes the generated ZAP API report files."
-            fi
-          elif [ "$ZAP_SCAN_STATUS" = "report-no-fail-alerts" ]; then
-            echo "::warning::ZAP API scan exited non-zero, but the uploaded report does not contain SQL injection or XSS alerts."
-            echo "Review the zap-api-evidence artifact before approving."
-          elif [ "$ZAP_SCAN_STATUS" = "scan-error" ]; then
-            echo "::warning::ZAP API scan failed before producing a full report."
-            echo "Review the zap-api-evidence artifact for docker logs, compose status, and api-docs capture before approving."
-          elif [ "$ZAP_OUTCOME" = "success" ]; then
-            echo "ZAP scan passed — approving a clean build."
+          {
+            echo "## DAST Review Summary"
+            echo ""
+            echo "| ZAP outcome | scan status | FAIL alerts present |"
+            echo "|-------------|-------------|---------------------|"
+            echo "| ${ZAP_OUTCOME:-?} | ${ZAP_SCAN_STATUS:-?} | ${ZAP_FAIL_ALERTS_PRESENT:-?} |"
+            echo ""
+            case "$ZAP_SCAN_STATUS" in
+              findings)
+                echo "ZAP flagged FAIL-level alerts (SQLi/XSS). Approving here writes 'dast: accepted' into the vuln-signoff attestation."
+                ;;
+              report-no-fail-alerts)
+                echo "ZAP exited non-zero but the report has no SQLi/XSS alerts. Review zap-api-evidence before approving."
+                ;;
+              scan-error)
+                echo "ZAP failed before producing a full report. Diagnostics in zap-api-evidence."
+                ;;
+              clean)
+                echo "ZAP clean — auto-approving."
+                ;;
+              *)
+                echo "ZAP completed with unexpected status. Review evidence."
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record decision
+        id: record
+        run: |
+          if [ "${{ needs.dast.outputs.zap_fail_alerts_present }}" = "true" ]; then
+            echo "decision=accepted" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::ZAP completed with an unexpected status. Review zap-api-evidence before approving."
+            echo "decision=clean" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Approved
-        run: echo "DAST review approved by ${{ github.actor }} — pipeline complete"
+# ══════════════════════════════════════════════════════════════════
+# JOB 8 — Vuln-signoff Attestation
+#
+# Aggregates the four gate decisions (sast, sca, trivy, dast) into a
+# single cosign attestation attached to each image digest. Predicate
+# type: https://oznetsecure.com.au/attestations/vuln-signoff/v1
+# Schema lives at .github/attestations/vuln-signoff.schema.json.
+#
+# Why this job sits at the end: dast-gate runs after push-and-sign,
+# so the DAST decision isn't knowable when the cosign *signature* is
+# written. We accept a brief window between sign and attest where the
+# image is signed-but-not-yet-attested; admission policy can require
+# both (signature AND attestation predicate) to admit, which gates
+# any in-flight pull during that window.
+# ══════════════════════════════════════════════════════════════════
+  attest:
+    name: Write vuln-signoff attestation
+    # All upstream jobs whose outputs are read directly must be in needs[].
+    # `always()` so we still emit an attestation if dast was skipped or
+    # auto-passed; the predicate captures that as gates.dast.status="skipped".
+    needs:
+      - sast
+      - sast-gate
+      - sca-backend
+      - sca-frontend
+      - sca-gate
+      - container-scan
+      - trivy-gate
+      - push-and-sign
+      - dast
+      - dast-gate
+    if: always() && needs.push-and-sign.result == 'success' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build vuln-signoff predicate
+        env:
+          SAST_DECISION:  ${{ needs.sast-gate.outputs.decision }}
+          SAST_ERR:       ${{ needs.sast.outputs.error_count }}
+          SAST_WARN:      ${{ needs.sast.outputs.warn_count }}
+          SCA_DECISION:   ${{ needs.sca-gate.outputs.decision }}
+          SCA_BE_CRIT:    ${{ needs.sca-backend.outputs.crit_count }}
+          SCA_BE_HIGH:    ${{ needs.sca-backend.outputs.high_count }}
+          SCA_FE_CRIT:    ${{ needs.sca-frontend.outputs.crit_count }}
+          SCA_FE_HIGH:    ${{ needs.sca-frontend.outputs.high_count }}
+          TRIVY_DECISION: ${{ needs.trivy-gate.outputs.decision }}
+          TRIVY_CRIT:     ${{ needs.container-scan.outputs.crit_count }}
+          TRIVY_HIGH:     ${{ needs.container-scan.outputs.high_count }}
+          DAST_RESULT:    ${{ needs.dast.result }}
+          DAST_DECISION:  ${{ needs.dast-gate.outputs.decision }}
+          DAST_STATUS:    ${{ needs.dast.outputs.zap_scan_status }}
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime
+
+          def n(v, default=0):
+              try: return int(v)
+              except: return default
+
+          def gate(decision, **findings):
+              # decision may be empty when a gate was skipped — treat as skipped
+              if not decision:
+                  return {"status": "skipped", "findings": findings,
+                          "reason": "training-lab — gate not run on this trigger"}
+              return {"status": decision, "findings": findings,
+                      "reason": "training-lab — intentional vulnerabilities accepted for SQLi demo"} \
+                  if decision == "accepted" else \
+                  {"status": decision, "findings": findings}
+
+          predicate = {
+              "pipeline_run": {
+                  "workflow":   ".github/workflows/security-pipeline.yml",
+                  "run_id":     os.environ["GITHUB_RUN_ID"],
+                  "commit_sha": os.environ["GITHUB_SHA"],
+              },
+              "reviewer":    os.environ.get("GITHUB_ACTOR", "auto"),
+              "approved_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "gates": {
+                  "sast":  gate(os.environ["SAST_DECISION"],
+                                error=n(os.environ["SAST_ERR"]),
+                                warning=n(os.environ["SAST_WARN"])),
+                  "sca":   gate(os.environ["SCA_DECISION"],
+                                critical=n(os.environ["SCA_BE_CRIT"]) + n(os.environ["SCA_FE_CRIT"]),
+                                high=n(os.environ["SCA_BE_HIGH"]) + n(os.environ["SCA_FE_HIGH"])),
+                  "trivy": gate(os.environ["TRIVY_DECISION"],
+                                critical=n(os.environ["TRIVY_CRIT"]),
+                                high=n(os.environ["TRIVY_HIGH"])),
+                  "dast":  gate(os.environ["DAST_DECISION"],
+                                summary=os.environ.get("DAST_STATUS", "")),
+              },
+          }
+          with open("predicate.json", "w") as f:
+              json.dump(predicate, f, indent=2)
+          print(json.dumps(predicate, indent=2))
+          PY
+
+      - name: Upload predicate as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-signoff-predicate
+          path: predicate.json
+          retention-days: 90
+
+      - name: Attest frontend image
+        env:
+          PREDICATE_TYPE: https://oznetsecure.com.au/attestations/vuln-signoff/v1
+        run: |
+          cosign attest --yes \
+            --type "${PREDICATE_TYPE}" \
+            --predicate predicate.json \
+            ${{ env.FRONTEND_IMAGE }}@${{ needs.push-and-sign.outputs.frontend-digest }}
+
+      - name: Attest backend image
+        env:
+          PREDICATE_TYPE: https://oznetsecure.com.au/attestations/vuln-signoff/v1
+        run: |
+          cosign attest --yes \
+            --type "${PREDICATE_TYPE}" \
+            --predicate predicate.json \
+            ${{ env.BACKEND_IMAGE }}@${{ needs.push-and-sign.outputs.backend-digest }}
+
+      - name: Verify attestations
+        env:
+          PREDICATE_TYPE: https://oznetsecure.com.au/attestations/vuln-signoff/v1
+        run: |
+          cosign verify-attestation \
+            --type "${PREDICATE_TYPE}" \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            ${{ env.FRONTEND_IMAGE }}@${{ needs.push-and-sign.outputs.frontend-digest }} \
+            > /dev/null
+
+          cosign verify-attestation \
+            --type "${PREDICATE_TYPE}" \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            ${{ env.BACKEND_IMAGE }}@${{ needs.push-and-sign.outputs.backend-digest }} \
+            > /dev/null
+
+          echo "vuln-signoff/v1 attestation verified on both image digests."

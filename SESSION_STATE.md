@@ -4,29 +4,33 @@
 > Keep it under ~80 lines. Detailed runbooks live in PHASE*.md.
 
 ## Current phase
-**3b-4 complete — IaC hygiene pass landed.** Full stack runs on EKS with
-HTTPS-terminated ALB, IP-allowlisted to operator /32. Pipeline SCA gate is
-manual-review based. ECR repos now live in `infra-base` (survive nightly
-destroys). State locking is S3-native (`use_lockfile`). Lab destroyed at
-end of session.
+**3b-4 + pipeline gate-unification (in progress).** Lab destroyed. Pipeline
+now has four manual-review gates (SAST, SCA, Trivy, DAST), each producing
+a decision that aggregates into a single cosign `vuln-signoff/v1`
+attestation on each image digest. Predicate schema in
+`.github/attestations/vuln-signoff.schema.json`.
 
 ## Last commit
-`7a34af5 refactor(tf): move ECR repos from infra-lab to infra-base` (May 12 2026)
+`038870a docs(session): expand issue #1 (vpcId/IMDS hop-limit trade-offs)` (May 13 2026)
 
-## Resolved this session (closes #3, #5, #6 + untracked-TF)
-- Frontend SCA `fast-uri` HIGH cleared via `overrides` in package.json.
-- SCA pipeline → manual-review gate (`sca-review` env). Frontend
-  `audit-exceptions.json` scaffold mirrors backend.
-- HTTPS at the ALB (ACM cert, TLS 1.3/1.2 policy, HTTP→301).
-- ALB inbound-cidrs pinned to operator /32; `bin/whitelist-me.sh` auto-
-  patches on IP rotation.
-- ECR images mirrored from GHCR (`f814ac7`), first deploy where running
-  image matches pipeline-signed image.
-- `use_lockfile = true` on both backends; DDB lock table deleted.
-- Promoted `cluster-bootstrap.tf` + `ebs-csi.tf` to git; `**/*.tfplan`
-  gitignored.
-- ECR repos moved to `infra-base` (6 state imports, 1 state rm; no
-  AWS-side recreate).
+## Resolved this session
+- **SAST `--error` removed.** Was failing every push on the deliberately
+  vulnerable demo routes. Now emits findings as outputs, sast-gate enters
+  `sast-review` env if any finding present, else auto-passes.
+- **Trivy refactored to gate-with-exceptions.** New `trivy-exceptions.json`
+  at repo root (CVE/advisory ID allowlist). Trivy emits JSON + table,
+  parses minus exceptions, sets outputs. trivy-gate uses `trivy-review`
+  environment on findings, auto on clean. No more `exit-code: 1`.
+- **DAST gate skip-then-approve bug fixed.** `if: always()` replaced with
+  `needs.dast.result == 'success'`. Gate now correctly skips when DAST
+  didn't run, instead of auto-approving a non-existent scan.
+- **Vuln-signoff attestation step (`attest` job).** Aggregates all four
+  gate decisions into one predicate of type
+  `https://oznetsecure.com.au/attestations/vuln-signoff/v1`, attached to
+  each image digest via `cosign attest`. Verified back with
+  `cosign verify-attestation`.
+- **Predicate schema** documented at
+  `.github/attestations/vuln-signoff.schema.json`.
 
 ## Open issues
 1. **ALBC vpcId requires manual `--set` every cluster recreate.** Root
@@ -53,9 +57,16 @@ end of session.
    reduces toil; long-term fix is AWS Verified Access or WireGuard endpoint.
 8. **No automatic deploy on `git push`** — pipeline signs to GHCR but
    nothing pushes to ECR or updates `k8s/*/deployment.yaml`. Manual
-   mirror + SHA bump + apply per release. Next session: add an OIDC-
-   authed ECR push job to `security-pipeline.yml`; further out, Argo
-   Image Updater or similar for end-to-end automation.
+   mirror + SHA bump + apply per release.
+9. **New `sast-review` and `trivy-review` environments need creation.**
+   GitHub repo → Settings → Environments → New environment → Required
+   reviewers: add yourself. Without these, gates auto-pass on findings.
+   `sca-review` and `dast-review` already exist.
+10. **Kyverno cosigned admission policy not yet enforced.** Lab cluster
+    accepts any signed image; prod policy should require
+    `vuln-signoff/v1` attestation with all `gates.*.status` in
+    `[clean, accepted]` (with prod-specific further restrictions on
+    `accepted`). This is the consumer side of the attestation work.
 
 ## Housekeeping pile
 M `helm/alb-controller/values.yaml` (keep until #1). Drift/junk to
@@ -63,11 +74,14 @@ decide on next pass: `.DS_Store`, `backend/backend_dev_notes.md`,
 `CLAUDE.md`, root `package-lock.json`, `test.json`.
 
 ## Next actions (pick one)
-1. Add ECR push to `security-pipeline.yml` (closes #8 cheap fix path).
-2. Fix node-group hop-limit, drop vpcId pin (#1).
-3. Runtime hardening track: NetworkPolicies + Pod Security Standards on
-   `sqlinj` namespace + Kyverno cosign admission policy.
-4. (Phase 4 prep) EKS KMS envelope encryption for etcd Secrets.
+1. Create the new GitHub environments `sast-review` and `trivy-review`
+   (closes #9) — required before next push or those gates auto-pass on
+   findings.
+2. Add ECR push to `security-pipeline.yml` (closes #8 cheap fix path).
+3. Author Kyverno cosigned admission policy that verifies the
+   `vuln-signoff/v1` attestation predicate (closes #10).
+4. Fix node-group hop-limit, drop vpcId pin (#1).
+5. Runtime hardening track: NetworkPolicies + PSS on `sqlinj` namespace.
 
 ## Lab teardown state
 **Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy
@@ -82,6 +96,9 @@ Route 53 zone. Tomorrow's spin-up has working images already in ECR.
 - Helm values: `helm/{alb-controller,external-secrets}/values.yaml`
 - IaC: `terraform/infra-lab/`, `terraform/infra-base/` (now owns ECR)
 - Tools: `bin/whitelist-me.sh`
+- Pipeline: `.github/workflows/security-pipeline.yml`,
+  `.github/attestations/vuln-signoff.schema.json`,
+  `{backend,frontend}/audit-exceptions.json`, `trivy-exceptions.json`
 
 ## AWS / cluster identifiers
 - Account `510151297987`, region `ap-southeast-2`

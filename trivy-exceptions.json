@@ -1,0 +1,5 @@
+{
+  "_comment": "Trivy SCA-on-images exceptions. Mirror of backend/audit-exceptions.json and frontend/audit-exceptions.json but for container-layer findings (OS packages + lang deps as Trivy sees them). The trivy-gate job skips findings whose CVE / advisory ID appears here.",
+  "_review_date": "2026-07-01",
+  "exceptions": []
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oznetsecure.com.au/attestations/vuln-signoff/v1",
+  "title": "Vulnerability sign-off attestation",
+  "description": "Recorded decisions from SAST/SCA/Trivy/DAST manual review gates. One attestation per pipeline run, aggregating all four scanners' outcomes. Used by Kyverno/cosigned admission policy to enforce 'images carrying accepted findings cannot deploy to prod' regardless of valid signature.",
+  "type": "object",
+  "required": ["predicateType", "predicate"],
+  "properties": {
+    "predicateType": {
+      "const": "https://oznetsecure.com.au/attestations/vuln-signoff/v1"
+    },
+    "predicate": {
+      "type": "object",
+      "required": ["pipeline_run", "reviewer", "approved_at", "gates"],
+      "properties": {
+        "pipeline_run": {
+          "type": "object",
+          "required": ["workflow", "run_id", "commit_sha"],
+          "properties": {
+            "workflow":   { "type": "string", "description": "GitHub Actions workflow file" },
+            "run_id":     { "type": "string", "description": "GitHub Actions run ID — URL trace" },
+            "commit_sha": { "type": "string", "description": "Source commit SHA" }
+          }
+        },
+        "reviewer": {
+          "type": "string",
+          "description": "GitHub login of the actor who approved every gate that required approval. Equal to 'auto' when all gates auto-passed (no findings)."
+        },
+        "approved_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the final gate completed."
+        },
+        "gates": {
+          "type": "object",
+          "required": ["sast", "sca", "trivy", "dast"],
+          "properties": {
+            "sast":  { "$ref": "#/$defs/gateOutcome" },
+            "sca":   { "$ref": "#/$defs/gateOutcome" },
+            "trivy": { "$ref": "#/$defs/gateOutcome" },
+            "dast":  { "$ref": "#/$defs/gateOutcome" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "gateOutcome": {
+      "type": "object",
+      "required": ["status", "findings"],
+      "properties": {
+        "status": {
+          "enum": ["clean", "accepted", "skipped"],
+          "description": "clean = no findings; accepted = findings present and reviewer approved; skipped = scanner didn't run on this trigger"
+        },
+        "findings": {
+          "type": "object",
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high":     { "type": "integer", "minimum": 0 },
+            "summary":  { "type": "string", "description": "Human-readable list of unexcepted finding IDs at gate time." }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional free-text justification carried from the workflow (typically a constant per environment, e.g. 'training-lab — intentional SQLi for demo')."
+        }
+      }
+    }
+  }
+}
