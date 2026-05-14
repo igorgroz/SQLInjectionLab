@@ -1,7 +1,12 @@
-# SESSION_STATE — SQLInjProject
+# SESSION_STATE — DevSecOps Platform Lab
 
 > Load this file first at the start of every session. Update it at the end.
 > Keep it under ~80 lines. Detailed runbooks live in PHASE*.md.
+
+## Project framing
+DevSecOps platform lab: a hardened CI/CD supply-chain pipeline and EKS
+runtime built around a black-box **target application under test**. All
+work here is defensive — detection, hardening, signing, and remediation.
 
 ## Current phase
 **3b-4 + pipeline gate-unification (in progress).** Lab destroyed. Pipeline
@@ -14,9 +19,9 @@ attestation on each image digest. Predicate schema in
 `038870a docs(session): expand issue #1 (vpcId/IMDS hop-limit trade-offs)` (May 13 2026)
 
 ## Resolved this session
-- **SAST `--error` removed.** Was failing every push on the deliberately
-  vulnerable demo routes. Now emits findings as outputs, sast-gate enters
-  `sast-review` env if any finding present, else auto-passes.
+- **SAST `--error` removed.** Was failing every push on the target
+  application's demo routes. Now emits findings as outputs, sast-gate
+  enters `sast-review` env if any finding present, else auto-passes.
 - **Trivy refactored to gate-with-exceptions.** New `trivy-exceptions.json`
   at repo root (CVE/advisory ID allowlist). Trivy emits JSON + table,
   parses minus exceptions, sets outputs. trivy-gate uses `trivy-review`
@@ -73,15 +78,27 @@ M `helm/alb-controller/values.yaml` (keep until #1). Drift/junk to
 decide on next pass: `.DS_Store`, `backend/backend_dev_notes.md`,
 `CLAUDE.md`, root `package-lock.json`, `test.json`.
 
-## Next actions (pick one)
-1. Create the new GitHub environments `sast-review` and `trivy-review`
-   (closes #9) — required before next push or those gates auto-pass on
-   findings.
-2. Add ECR push to `security-pipeline.yml` (closes #8 cheap fix path).
-3. Author Kyverno cosigned admission policy that verifies the
-   `vuln-signoff/v1` attestation predicate (closes #10).
-4. Fix node-group hop-limit, drop vpcId pin (#1).
-5. Runtime hardening track: NetworkPolicies + PSS on `sqlinj` namespace.
+## Next actions — tomorrow's roadmap (ordered)
+1. **Rename pass — strip all `sqlinj` references.** Folders, files, the
+   project dir; then chase refs through Terraform, Helm values, k8s
+   manifests, phase docs. Live AWS identifiers (namespace `sqlinj`,
+   cluster `sqlinj-eks`, ECR repos, IRSA roles, SM secret paths) are a
+   deliberate separate sub-pass — they ripple into running infra.
+2. **Pipeline → push directly to ECR** (closes #8). Signed images land
+   in ECR, not just GHCR.
+3. **Automate app provisioning after infra provisioning.** Chain the
+   workload deploy off the Terraform apply — no manual SHA bump + apply
+   per release.
+4. **Prototype track — "very secure app".** Begin design on
+   CloudFormation, API Gateway, service mesh (mTLS + east-west policy)
+   as the next architecture layer.
+
+## Still-open work (fold in as capacity allows)
+- GitHub environments `sast-review` + `trivy-review` (#9) — needed
+  before next push or those gates auto-pass on findings.
+- Kyverno cosigned admission policy verifying `vuln-signoff/v1` (#10).
+- Node-group hop-limit fix, drop vpcId pin (#1).
+- Runtime hardening: NetworkPolicies + PSS on the app namespace (#5).
 
 ## Lab teardown state
 **Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy
