@@ -9,33 +9,34 @@ runtime built around a black-box **target application under test**. All
 work here is defensive — detection, hardening, signing, and remediation.
 
 ## Current phase
-**3b-4 + pipeline gate-unification (in progress).** Lab destroyed. Pipeline
-now has four manual-review gates (SAST, SCA, Trivy, DAST), each producing
-a decision that aggregates into a single cosign `vuln-signoff/v1`
-attestation on each image digest. Predicate schema in
-`.github/attestations/vuln-signoff.schema.json`.
+**3b-4 + pipeline gate-unification (complete).** Lab destroyed. Full
+pipeline operational: SAST → SCA → build → Trivy → push GHCR → sign →
+mirror ECR → attest → deploy (cluster-aware). Gates auto-approve via
+`AUTO_APPROVE_GATES=true` repo variable. deploy-lab.yml provisions full
+stack from scratch via workflow_dispatch.
 
 ## Last commit
-`038870a docs(session): expand issue #1 (vpcId/IMDS hop-limit trade-offs)` (May 13 2026)
+`fix: replace ALB smoke test with kubectl port-forward health check` (May 15 2026)
 
 ## Resolved this session
-- **SAST `--error` removed.** Was failing every push on the target
-  application's demo routes. Now emits findings as outputs, sast-gate
-  enters `sast-review` env if any finding present, else auto-passes.
-- **Trivy refactored to gate-with-exceptions.** New `trivy-exceptions.json`
-  at repo root (CVE/advisory ID allowlist). Trivy emits JSON + table,
-  parses minus exceptions, sets outputs. trivy-gate uses `trivy-review`
-  environment on findings, auto on clean. No more `exit-code: 1`.
-- **DAST gate skip-then-approve bug fixed.** `if: always()` replaced with
-  `needs.dast.result == 'success'`. Gate now correctly skips when DAST
-  didn't run, instead of auto-approving a non-existent scan.
-- **Vuln-signoff attestation step (`attest` job).** Aggregates all four
-  gate decisions into one predicate of type
-  `https://oznetsecure.com.au/attestations/vuln-signoff/v1`, attached to
-  each image digest via `cosign attest`. Verified back with
-  `cosign verify-attestation`.
-- **Predicate schema** documented at
-  `.github/attestations/vuln-signoff.schema.json`.
+- **Rename pass complete** (repo-text tokens). Live AWS identifiers remain
+  as deliberate separate sub-pass.
+- **GitHub Actions OIDC role** (`devseclab-github-actions`) created in
+  infra-base via Terraform. Survives nightly destroy. ARN set as
+  `AWS_GITHUB_ACTIONS_ROLE_ARN` repo secret.
+- **ECR push** added to `push-and-sign` job — mirrors signed images to ECR
+  by digest (SHA tag only, IMMUTABLE repos). Skips if tag already exists.
+- **deploy job (JOB 9)** added to security-pipeline — runs `kubectl set image`
+  + rollout after attest succeeds. Gracefully skips if cluster is down.
+- **deploy-lab.yml** added — full provision-and-deploy via workflow_dispatch
+  (terraform → ALBC → ESO → workloads → ingress → ALB → port-forward smoke test).
+- **AUTO_APPROVE_GATES** repo variable — bypasses all four manual review
+  gates during active dev. Delete to reinstate manual approval.
+- **EKS access entry** for GitHub Actions role added to infra-lab.
+- **Smoke test** replaced with kubectl port-forward (ALB locked to operator IP).
+- **#1 closed** — ALBC vpcId now flows from terraform output in deploy-lab.yml.
+- **#8 closed** — pipeline pushes to ECR and deploys automatically.
+- **#9 confirmed** — all four review environments verified in GitHub.
 
 ## Open issues
 1. **ALBC vpcId requires manual `--set` every cluster recreate.** Root
@@ -72,30 +73,25 @@ attestation on each image digest. Predicate schema in
     `accepted`). This is the consumer side of the attestation work.
 
 ## Housekeeping pile
-M `helm/alb-controller/values.yaml` (keep until #1). Drift/junk to
-decide on next pass: `.DS_Store`, `backend/backend_dev_notes.md`,
-`CLAUDE.md`, root `package-lock.json`, `test.json`.
+`.DS_Store` — add to `.gitignore` (currently showing as modified every session).
 
-## Next actions — tomorrow's roadmap (ordered)
-1. **(done — partial)** Rename pass complete for repo-text tokens. Live AWS
-   identifiers (namespace `sqlinj`, cluster `sqlinj-eks`, ECR repos, IRSA
-   roles, SM secret paths `sqlinj/backend/*`) are a deliberate separate
-   sub-pass — they ripple into running infra.
-2. **Pipeline → push directly to ECR** (closes #8). Signed images land
-   in ECR, not just GHCR.
-3. **Automate app provisioning after infra provisioning.** Chain the
-   workload deploy off the Terraform apply — no manual SHA bump + apply
-   per release.
-4. **Prototype track — "very secure app".** Begin design on
-   CloudFormation, API Gateway, service mesh (mTLS + east-west policy)
-   as the next architecture layer.
+## Next actions — roadmap (ordered)
+1. **Live AWS identifier rename sub-pass** — namespace `sqlinj`, cluster
+   `sqlinj-eks`, ECR repos, IRSA roles, SM secret paths `sqlinj/backend/*`.
+   Ripples into running infra; do during next cluster spin-up.
+2. **Kyverno cosigned admission policy** (#10) — enforce `vuln-signoff/v1`
+   attestation at admission time. Consumer side of the attestation work.
+3. **NetworkPolicies + PSS** on the app namespace.
+4. **Node-group hop-limit fix** (#1 sub-issue) — drop vpcId pin from
+   values.yaml entirely via cluster-info ConfigMap if desired.
+5. **Prototype track — "very secure app".** CloudFormation, API Gateway,
+   service mesh (mTLS + east-west policy).
 
 ## Still-open work (fold in as capacity allows)
-- GitHub environments `sast-review` + `trivy-review` (#9) — needed
-  before next push or those gates auto-pass on findings.
 - Kyverno cosigned admission policy verifying `vuln-signoff/v1` (#10).
-- Node-group hop-limit fix, drop vpcId pin (#1).
-- Runtime hardening: NetworkPolicies + PSS on the app namespace (#5).
+- Node-group hop-limit fix, drop vpcId pin (#1 sub-issue).
+- Runtime hardening: NetworkPolicies + PSS on the app namespace.
+- GoDaddy CNAME update needed after each cluster recreate (new ALB hostname).
 
 ## Lab teardown state
 **Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy
