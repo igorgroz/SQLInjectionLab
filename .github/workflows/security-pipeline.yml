@@ -1395,17 +1395,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
-
       - name: Check cluster is reachable
         id: cluster_check
         run: |
-          if kubectl get nodes --request-timeout=15s >/dev/null 2>&1; then
+          if aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}" 2>/dev/null \
+             && kubectl get nodes --request-timeout=15s >/dev/null 2>&1; then
             echo "reachable=true" >> "$GITHUB_OUTPUT"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::EKS cluster not reachable — deploy skipped. Run deploy-lab.yml manually to provision."
+            echo "::warning::EKS cluster ${CLUSTER_NAME} not found or not reachable — deploy skipped. Run deploy-lab.yml to provision."
           fi
 
       - name: Update backend image
