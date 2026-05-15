@@ -1,6 +1,6 @@
 # Lab Security Decisions — Conscious Deviations from Production Posture
 
-This document records every deliberate decision in the SQLInjProject lab that
+This document records every deliberate decision in the devseclab lab that
 does not match production best practice, with the rationale and the production
 pattern that would replace it.
 
@@ -127,7 +127,7 @@ provide a clear upgrade path if any component of this lab is adapted for product
 ### K8S-01 · Self-Signed TLS Certificate (minikube / Phase 1-2)
 | | |
 |---|---|
-| **Lab** | mkcert-generated self-signed certificate, `sqlinj.local` in `/etc/hosts` |
+| **Lab** | mkcert-generated self-signed certificate, `devseclab.local` in `/etc/hosts` |
 | **Production** | ACM certificate with DNS validation, provisioned by Terraform, attached to the ALB. Domain delegated to Route 53 via NS records at registrar (Dodo) |
 | **Rationale** | Production TLS requires a real domain and Route 53 hosted zone — addressed in Phase 3b |
 | **Production fix** | `aws_acm_certificate` + `aws_route53_record` for DNS validation + ALB listener with HTTPS |

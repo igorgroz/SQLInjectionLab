@@ -5,7 +5,7 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     GitHubOwner=igorgroz \
-    GitHubRepo=SQLInjectionLab \
+    GitHubRepo=devseclab \
     GitHubBranch=master \
     ConnectionArn=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
     FrontendBucketName=clhts-origin-250325
@@ -21,11 +21,11 @@ Second create Backend minus EKS see the outputs:
   --template-body file://deploy_be_minus_EKS.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
-    ParameterKey=DBInstanceIdentifier,ParameterValue=sqlinjproject-db \
+    ParameterKey=DBInstanceIdentifier,ParameterValue=devseclab-db \
     ParameterKey=DBMasterUsername,ParameterValue=sql_lab_user \
     ParameterKey=DBMasterPassword,ParameterValue=StrongPassword123 \
-    ParameterKey=DBSecretName,ParameterValue=sqlinjproject-db-secret \
-    ParameterKey=RDSSecurityGroupName,ParameterValue=sqlinjproject-rds-sg \
+    ParameterKey=DBSecretName,ParameterValue=devseclab-db-secret \
+    ParameterKey=RDSSecurityGroupName,ParameterValue=devseclab-rds-sg \
     ParameterKey=JWTSecretParameter,ParameterValue=f4868d01b84c586acb8906edd7bce854525b0fef58cd21bf276a06bbefa79ee657d686366a3f9bc66abecb876a85e1c90d0b2159311668efccf8557bfbb20e32
 
     Create  Eks Cluster:

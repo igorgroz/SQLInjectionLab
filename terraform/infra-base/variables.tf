@@ -11,7 +11,7 @@ variable "aws_region" {
 variable "github_repo" {
   description = "GitHub repository for CodeBuild source (format: owner/repo)"
   type        = string
-  default     = "igorgroz/SQLInjectionLab"
+  default     = "igorgroz/devseclab"
 }
 
 variable "github_branch" {

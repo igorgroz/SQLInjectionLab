@@ -58,7 +58,7 @@ spec:
                 - -U
                 - sql_lab_user
                 - -d
-                - sqlinjproject
+                - devseclab
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
@@ -68,7 +68,7 @@ spec:
                 - -U
                 - sql_lab_user
                 - -d
-                - sqlinjproject
+                - devseclab
             initialDelaySeconds: 30
             periodSeconds: 10
           resources:

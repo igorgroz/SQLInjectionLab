@@ -27,7 +27,7 @@
   paragraph.
 
 ## File handling
-- Edits go straight to `/Users/igorgrozdanov/Documents/Learn/SQLInjProject/…` —
+- Edits go straight to `/Users/igorgrozdanov/Documents/Learn/devseclab/…` —
   not the outputs scratch dir.
 - Never write a `.md` doc unless explicitly requested. The phase docs
   and `SESSION_STATE.md` are the only canonical state files.

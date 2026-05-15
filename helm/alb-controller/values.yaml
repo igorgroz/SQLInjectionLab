@@ -16,17 +16,19 @@
 # =============================================================================
 
 # --- Cluster context ---------------------------------------------------------
-# IDEALLY clusterName would be the only required identifier here, with
-# region and vpcId auto-discovered from EC2 IMDS. That fails on this lab
-# because the EKS launch template is provisioned with the default
-# httpPutResponseHopLimit=1 — pods are 2 hops from IMDS (pod veth -> host
-# eth0 -> IMDS) so the auto-discovery times out. The Terraform fix is to
-# bump httpPutResponseHopLimit to 2 in the launch template metadata_options.
-# Until that lands, hardcode vpcId + region here. UPDATE on every cluster
-# recreate (the VPC ID rotates).
+# IMDS auto-discovery of vpcId is blocked on purpose by the EKS launch
+# template's httpPutResponseHopLimit=1 (stops pods reading node IAM). So
+# we must pass vpcId explicitly. Rather than hardcoding it here (which
+# rotates per cluster recreate), pass it on the helm command line:
+#
+#   helm upgrade --install ... -f helm/alb-controller/values.yaml \
+#     --set vpcId=$(terraform -chdir=terraform/infra-lab output -raw vpc_id)
+#
+# That keeps this file cluster-portable. clusterName is stable across
+# recreates, region is stable, so they stay hardcoded.
 clusterName: sqlinj-eks
 region: ap-southeast-2
-vpcId: vpc-0d8f881ab0a666803
+# vpcId: set via --set on the helm install command, NOT here
 
 # --- ServiceAccount (IRSA binding) -------------------------------------------
 # The chart creates the SA in kube-system, name "aws-load-balancer-controller".

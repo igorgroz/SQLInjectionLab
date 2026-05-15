@@ -55,7 +55,7 @@ services:
       # unless explicitly set here.
       DB_HOST:     db
       DB_PORT:     5432
-      DB_NAME:     sqlinjproject
+      DB_NAME:     devseclab
       DB_USER:     sql_lab_user
       DB_PASSWORD: ${POSTGRES_PASSWORD}
 

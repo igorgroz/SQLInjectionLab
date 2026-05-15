@@ -1,5 +1,5 @@
 {
-  "name": "SQLInjectionLab",
+  "name": "devseclab",
   "forwardPorts": [3000, 5001, 5432],
   "portsAttributes": {
     "3000": {

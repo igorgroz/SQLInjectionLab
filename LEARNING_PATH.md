@@ -456,4 +456,4 @@ Your choice of Auth Code + PKCE with Entra ID is the correct, current standard f
 ---
 
 *Last updated: March 2026*
-*Project: SQLInjProject*
+*Project: devseclab*

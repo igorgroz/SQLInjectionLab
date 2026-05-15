@@ -4,7 +4,7 @@ aws cloudformation update-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
     ParameterKey=GitHubOwner,ParameterValue=igorgroz \
-    ParameterKey=GitHubRepo,ParameterValue=SQLInjectionLab \
+    ParameterKey=GitHubRepo,ParameterValue=devseclab \
     ParameterKey=GitHubBranch,ParameterValue=master \
     ParameterKey=ConnectionArn,ParameterValue=arn:aws:codeconnections:ap-southeast-2:510151297987:connection/c918f633-83a0-407a-8a75-2a9c13e229d9 \
     ParameterKey=FrontendBucketName,ParameterValue=clhts-origin-250325

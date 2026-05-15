@@ -1,4 +1,4 @@
-# SQLInjectionLab — Architecture & Design
+# devseclab — Architecture & Design
 
 > A containerised security learning lab demonstrating SQL injection vulnerabilities, secure vs insecure API patterns, and OAuth2/OIDC authentication with Microsoft Entra ID.
 
@@ -44,7 +44,7 @@ graph LR
 
         BE["**sqlinj-backend**\n─────────────\nNode.js Express\nauthJwt.js (jose)\nREST + GraphQL\n:5001 → :5001"]
 
-        DB["**sqlinj-db**\n─────────────\nPostgres 16\nsql_lab_user\nsqlinjproject DB\n:5432 → :5432"]
+        DB["**sqlinj-db**\n─────────────\nPostgres 16\nsql_lab_user\ndevseclab DB\n:5432 → :5432"]
 
         VOL[("postgres_data\nvolume")]
     end
@@ -184,7 +184,7 @@ erDiagram
 graph TB
     subgraph Tenant["IG LAB1 Directory (Entra Tenant)"]
 
-        subgraph FrontendApp["SQLInjFrontend App Registration"]
+        subgraph FrontendApp["devseclab-frontend App Registration"]
             FE_ID["Client ID: a6960366-...\nType: SPA"]
             FE_REDIR["Redirect URIs:\nhttp://localhost:3000\nhttps://*.app.github.dev"]
             FE_PERMS["API Permissions:\n✓ Graph: User.Read\n✓ MyHR App: user.read\n✓ MyHR App: user.write"]
@@ -231,7 +231,7 @@ graph LR
 ## Project Structure
 
 ```
-SQLInjectionLab/
+devseclab/
 ├── docker-compose.yml
 ├── .devcontainer/
 │   └── devcontainer.json        # Codespaces port config

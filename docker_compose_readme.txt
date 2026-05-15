@@ -1,5 +1,5 @@
 =============================================================
- SQLInjectionLab — Start / Stop / Rebuild Guide
+ devseclab — Start / Stop / Rebuild Guide
 =============================================================
 
 -------------------------------------------------------------
@@ -29,7 +29,7 @@ REBUILD ALL
   docker compose up --build
 
 RESTORE DB FROM DUMP (if DB is empty)
-  docker exec -i sqlinj-db psql -U sql_lab_user -d sqlinjproject < postgredb/dump.sql
+  docker exec -i sqlinj-db psql -U sql_lab_user -d devseclab < postgredb/dump.sql
 
 SHELL INTO A CONTAINER
   docker exec -it sqlinj-db sh
@@ -85,7 +85,7 @@ REBUILD ALL
     --codespace "$CODESPACE_NAME"
 
 RESTORE DB FROM DUMP
-  docker exec -i sqlinj-db psql -U sql_lab_user -d sqlinjproject < postgredb/dump.sql
+  docker exec -i sqlinj-db psql -U sql_lab_user -d devseclab < postgredb/dump.sql
 
 VIEW LOGS
   docker logs sqlinj-backend --tail 50
@@ -136,7 +136,7 @@ When Codespaces creates a new environment the URL changes.
 If login redirects fail (AADSTS50011 error) you need to add
 the new frontend URL as a redirect URI in Entra:
 
-  Azure Portal → App Registrations → SQLInjFrontend
+  Azure Portal → App Registrations → devseclab-frontend
   → Authentication → Add redirect URI:
   https://<new-codespace-name>-3000.app.github.dev
 

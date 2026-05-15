@@ -19,7 +19,7 @@ if [ -z "$AWS_ACCOUNT_ID" ]; then
 fi
 
 # RDS Configuration
-RDS_INSTANCE_ID="sqlinjproject-db"
+RDS_INSTANCE_ID="devseclab-db"
 
 # EKS CloudFormation Stack Configuration
 EKS_CFN_STACK_NAME="sqlinjpr-eks-cluster-stack"

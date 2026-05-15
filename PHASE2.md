@@ -88,7 +88,7 @@ After the first successful pipeline run:
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp="https://github.com/igorgroz/SQLInjectionLab/.github/workflows/.*" \
+  --certificate-identity-regexp="https://github.com/igorgroz/devseclab/.github/workflows/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
   ghcr.io/igorgroz/sqlinj-backend:latest
 ```

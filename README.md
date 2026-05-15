@@ -1,4 +1,4 @@
-zip -r SQLInjproject_current.zip . \
+zip -r devseclab_current.zip . \
   --exclude "*/node_modules/*" \
   --exclude "*/.git/*" \
   --exclude "*/dist/*" \

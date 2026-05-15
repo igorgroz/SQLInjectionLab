@@ -58,7 +58,7 @@ app.use((_req, res, next) => {
 // loops keep working without setting the var.
 const corsAllowedOrigins = (
   process.env.CORS_ALLOWED_ORIGINS ||
-  "http://localhost:3000,https://sqlinj.local,*.app.github.dev"
+  "http://localhost:3000,https://devseclab.local,*.app.github.dev"
 )
   .split(",")
   .map((s) => s.trim())
@@ -95,7 +95,7 @@ app.use("/graphql-insecure", insecureGraphQLMiddleware);
 app.use("/graphql-secure", requireJwt, secureGraphQLMiddleware);
 
 app.get("/", (req, res) => {
-  res.send("SQLInjectionLab backend is running");
+  res.send("devseclab backend is running");
 });
 
 app.get("/health", (_req, res) => {
@@ -113,7 +113,7 @@ app.get("/health", (_req, res) => {
 const openApiSpec = {
   openapi: "3.0.3",
   info: {
-    title: "SQLInjectionLab API",
+    title: "devseclab API",
     version: "1.0.0",
     description:
       "Training API with intentionally vulnerable (insecure) and secure routes. " +

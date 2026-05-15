@@ -18,5 +18,5 @@ metadata:
   name: db-config
   namespace: sqlinj
 data:
-  POSTGRES_DB: "sqlinjproject"
+  POSTGRES_DB: "devseclab"
   POSTGRES_USER: "sql_lab_user"

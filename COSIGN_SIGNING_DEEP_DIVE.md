@@ -81,7 +81,7 @@ graph TD
     Root["Sigstore Root CA<br/>self-signed, P-384<br/>2021-2031<br/>CN=sigstore"]
     Inter["Sigstore Intermediate<br/>P-384, CN=sigstore-intermediate<br/>valid 2022-04-13 → 2031-10-05"]
     Leaf["Leaf cert<br/>P-256 ephemeral key<br/>valid 05:55:22 → 06:05:22<br/>10-minute window"]
-    OIDC["GitHub Actions OIDC token<br/>iss=token.actions.githubusercontent.com<br/>sub=repo:igorgroz/SQLInjectionLab:ref:refs/heads/master<br/>sha=15435a08..."]
+    OIDC["GitHub Actions OIDC token<br/>iss=token.actions.githubusercontent.com<br/>sub=repo:igorgroz/devseclab:ref:refs/heads/master<br/>sha=15435a08..."]
     Payload["Simple Signing payload<br/>247 bytes of JSON<br/>names image sha256:92d9f06a..."]
     Image["Container image<br/>sha256:92d9f06a..."]
     CTLog[("CT log<br/>public, append-only")]
@@ -194,7 +194,7 @@ Same DER shape as signature #1 — `30 66 02 31 00 ...02 31 00 ...` — but now 
 What this signature covers is the TBSCertificate — all the cert fields *except* the signature itself. That includes:
 
 - the leaf's public key (the verifying key for signature #1)
-- the SAN URI (`https://github.com/igorgroz/SQLInjectionLab/.github/workflows/security-pipeline.yml@refs/heads/master`)
+- the SAN URI (`https://github.com/igorgroz/devseclab/.github/workflows/security-pipeline.yml@refs/heads/master`)
 - every `1.3.6.1.4.1.57264.1.*` extension carrying OIDC claims (see section 9)
 - the 10-minute validity window
 - the SCT (signature #4) embedded in the precert
@@ -292,18 +292,18 @@ Sigstore registered IANA Private Enterprise Number **57264** for this purpose. E
 
 | OID | Claim | Value (from this artifact)                                                                  |
 |-----|-------|----------------------------------------------------------------------------------------------|
-| SAN URI (critical) | identity | `https://github.com/igorgroz/SQLInjectionLab/.github/workflows/security-pipeline.yml@refs/heads/master` |
+| SAN URI (critical) | identity | `https://github.com/igorgroz/devseclab/.github/workflows/security-pipeline.yml@refs/heads/master` |
 | 57264.1.1 | OIDC issuer | `https://token.actions.githubusercontent.com` |
 | 57264.1.2 | event name | `push` |
 | 57264.1.3 | source SHA | `15435a0808e6f68b8bcf25e8c8a3633036fb10b5` |
 | 57264.1.4 | workflow name | `Security Pipeline` |
-| 57264.1.5 | source repository | `igorgroz/SQLInjectionLab` |
+| 57264.1.5 | source repository | `igorgroz/devseclab` |
 | 57264.1.6 | source ref | `refs/heads/master` |
 | 57264.1.8 | issuer URI (v2) | `https://token.actions.githubusercontent.com` |
 | 57264.1.9 | build config URI | `...workflows/security-pipeline.yml@refs/heads/master` |
 | 57264.1.10 | build config digest | `15435a0808e6f68b8bcf25e8c8a3633036fb10b5` |
 | 57264.1.11 | runner environment | `github-hosted` |
-| 57264.1.12 | source repository URI | `https://github.com/igorgroz/SQLInjectionLab` |
+| 57264.1.12 | source repository URI | `https://github.com/igorgroz/devseclab` |
 | 57264.1.13 | source repository digest | `15435a0808e6f68b8bcf25e8c8a3633036fb10b5` |
 | 57264.1.14 | source repository ref | `refs/heads/master` |
 | 57264.1.15 | source repository ID | `928699463` |
@@ -312,7 +312,7 @@ Sigstore registered IANA Private Enterprise Number **57264** for this purpose. E
 | 57264.1.18 | build config URI (v2) | `...workflows/security-pipeline.yml@refs/heads/master` |
 | 57264.1.19 | build config digest (v2) | `15435a0808e6f68b8bcf25e8c8a3633036fb10b5` |
 | 57264.1.20 | build trigger | `push` |
-| 57264.1.21 | run invocation URI | `https://github.com/igorgroz/SQLInjectionLab/actions/runs/24550057825/attempts/1` |
+| 57264.1.21 | run invocation URI | `https://github.com/igorgroz/devseclab/actions/runs/24550057825/attempts/1` |
 | 57264.1.22 | source repository visibility | `public` |
 
 The `1.1` through `1.6` OIDs are the legacy (v1) Sigstore extensions, retained for backward compatibility. The `1.8` through `1.22` range is the newer, more granular v2 schema that maps more closely to SLSA v1.0 provenance field names. Both are populated so any verifier works.
@@ -323,7 +323,7 @@ All of this is covered by **signature #2** (Fulcio's signature over the TBS cert
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp '^https://github\.com/igorgroz/SQLInjectionLab/\.github/workflows/security-pipeline\.yml@refs/heads/master$' \
+  --certificate-identity-regexp '^https://github\.com/igorgroz/devseclab/\.github/workflows/security-pipeline\.yml@refs/heads/master$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   <image>
 ```
@@ -357,7 +357,7 @@ sequenceDiagram
 
     W->>W: Build & push image<br/>digest = sha256:92d9f06a...
     W->>W: Request OIDC token from runtime<br/>audience=sigstore
-    Note over W: JWT payload:<br/>sub=repo:igorgroz/SQLInjectionLab:ref:refs/heads/master<br/>sha=15435a08..., workflow=Security Pipeline, ...
+    Note over W: JWT payload:<br/>sub=repo:igorgroz/devseclab:ref:refs/heads/master<br/>sha=15435a08..., workflow=Security Pipeline, ...
 
     W->>C: cosign sign <image digest>
     C->>C: Generate ephemeral P-256 keypair<br/>(in-memory only)
@@ -470,7 +470,7 @@ Every line of that sequence can run on an air-gapped host given only the cosign 
 
 ### What it buys
 
-- **Attacker-pushes-malicious-image-to-ECR attack is defeated.** If someone exfiltrates AWS credentials and pushes a malicious image tagged `main`, they cannot produce a matching `.sig` artifact because they can't obtain a Fulcio cert with `sub=repo:igorgroz/SQLInjectionLab:...`. An admission controller (Kyverno, policy-controller) running `cosign verify` at the cluster boundary will refuse the Pod.
+- **Attacker-pushes-malicious-image-to-ECR attack is defeated.** If someone exfiltrates AWS credentials and pushes a malicious image tagged `main`, they cannot produce a matching `.sig` artifact because they can't obtain a Fulcio cert with `sub=repo:igorgroz/devseclab:...`. An admission controller (Kyverno, policy-controller) running `cosign verify` at the cluster boundary will refuse the Pod.
 - **No long-lived signing key to protect.** The ephemeral key exists for under a second. There is nothing to store in a KMS, nothing to rotate, nothing to revoke.
 - **Fully offline verification.** Given cosign's embedded trust roots and the registry-resident artifact, a verifier needs zero connectivity to sigstore.dev or GitHub to validate an image.
 - **Public audit trail.** Every signature this pipeline produces is visible to anyone with Rekor access — including monitoring tools that look for rogue issuances claiming to be from your repo.
@@ -530,7 +530,7 @@ cosign triangulate ghcr.io/igorgroz/sqlinj-backend@sha256:92d9f06a...
 
 # Verify end-to-end (what an admission controller would do)
 cosign verify \
-  --certificate-identity-regexp '^https://github\.com/igorgroz/SQLInjectionLab/\.github/workflows/security-pipeline\.yml@refs/heads/master$' \
+  --certificate-identity-regexp '^https://github\.com/igorgroz/devseclab/\.github/workflows/security-pipeline\.yml@refs/heads/master$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-backend@sha256:92d9f06a...
 ```

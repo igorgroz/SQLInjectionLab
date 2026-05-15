@@ -25,16 +25,16 @@ serviceAccount:
 # Application specific configuration (mirrors your .env structure)
 config:
   containerPort: 5001 # Port your application listens on
-  dbHost: "sqlinjproject-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com"
+  dbHost: "devseclab-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com"
   dbPort: "5432"
-  dbName: "sqlinjproject"
+  dbName: "devseclab"
   dbSsl: "true" # Ensure your app handles this (e.g., sets sslmode=require)
   jwtExpiration: "3600"
 
 # Secrets Management (for ExternalSecrets Operator)
 # These are the names of your secrets in AWS Secrets Manager
 awsSecrets:
-  dbSecretNameInSM: "sqlinjproject-db-secret"
+  dbSecretNameInSM: "devseclab-db-secret"
   jwtSecretNameInSM: "jwt-secret"
 
   # These are the names for the Kubernetes Secrets that ESO will create in your app's namespace

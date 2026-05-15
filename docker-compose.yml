@@ -4,7 +4,7 @@ services:
     container_name: sqlinj-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: sqlinjproject
+      POSTGRES_DB: devseclab
       POSTGRES_USER: sql_lab_user
       POSTGRES_PASSWORD: StrongPassword123
     ports:
@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./postgredb/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sql_lab_user -d sqlinjproject"]
+      test: ["CMD-SHELL", "pg_isready -U sql_lab_user -d devseclab"]
       interval: 5s
       timeout: 5s
       retries: 10

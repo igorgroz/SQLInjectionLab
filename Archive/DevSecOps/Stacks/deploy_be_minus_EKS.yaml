@@ -5,7 +5,7 @@ Description: Infrastructure for SQL Injection Project (VPC, RDS, Secrets) with
 Parameters:
   DBInstanceIdentifier:
     Type: String
-    Default: sqlinjproject-db
+    Default: devseclab-db
     Description: Identifier for the RDS instance
   DBMasterUsername:
     Type: String
@@ -17,11 +17,11 @@ Parameters:
     Description: Master password for the PostgreSQL database
   DBSecretName:
     Type: String
-    Default: sqlinjproject-db-secret
+    Default: devseclab-db-secret
     Description: Name of the Secrets Manager secret for the database credentials
   RDSSecurityGroupName:
     Type: String
-    Default: sqlinjproject-rds-sg
+    Default: devseclab-rds-sg
     Description: Security group name for the RDS database
   JWTSecretParameter:
     Type: String

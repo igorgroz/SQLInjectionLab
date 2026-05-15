@@ -1,10 +1,10 @@
 To open the database:
 
->psql -d sqlinjproject -U igorgrozdanov
+>psql -d devseclab -U igorgrozdanov
 
 
 
-sqlinjproject=# \du
+devseclab=# \du
                                      List of roles
    Role name   |                         Attributes                         | Member of 
 ---------------+------------------------------------------------------------+-----------
@@ -19,7 +19,7 @@ Schema |     Name     | Type  |     Owner
  public | user_clothes | table | igorgrozdanov
  public | users        | table | igorgrozdanov
 
-sqlinjproject=# select * from users;
+devseclab=# select * from users;
  userid |  name   | surname  
 --------+---------+----------
       1 | John    | Doe
@@ -32,7 +32,7 @@ sqlinjproject=# select * from users;
 
 
 
-sqlinjproject=# select * from user_clothes;
+devseclab=# select * from user_clothes;
  id | userid | clothid 
 ----+--------+---------
   1 |      1 |       1
@@ -51,7 +51,7 @@ sqlinjproject=# select * from user_clothes;
  53 |      3 |       7
 (14 rows)
 
-sqlinjproject=# select * from clothes;
+devseclab=# select * from clothes;
  clothid | description | color | brand  |   size   | material  
 ---------+-------------+-------+--------+----------+-----------
        1 | T-Shirt     | Red   | Nike   | M        | Cotton
@@ -67,4 +67,4 @@ sqlinjproject=# select * from clothes;
 
 
 To connect to RDS database in AWS run following command:
-psql -h sqlinjproject-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com -U sql_lab_user -d sqlinjproject
+psql -h devseclab-db.cymhse7fxmp9.ap-southeast-2.rds.amazonaws.com -U sql_lab_user -d devseclab

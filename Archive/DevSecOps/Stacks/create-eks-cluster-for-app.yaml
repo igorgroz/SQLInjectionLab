@@ -211,7 +211,7 @@ Resources:
         # SourceSecurityGroups: [ !GetAtt YourBastionSG.GroupId ] # If you have a specific bastion SG
       Tags:
         Name: !Sub "${EKSClusterName}-Node"
-        Purpose: "SQLInjectionLab-EKSNode"
+        Purpose: "devseclab-EKSNode"
 
 Outputs:
   EKSClusterNameOutput:

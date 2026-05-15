@@ -27,7 +27,7 @@ __pycache__/
 infra/OpenVPN/*.dmg
 *.dmg
 backend/.env
-SQLInjproject.zip
+devseclab.zip
 *.pem
 *.zip
 .cosign-home/
