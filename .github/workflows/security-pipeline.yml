@@ -797,21 +797,35 @@ jobs:
         # the same content-addressed manifest. Digest equality means
         # cosign's Rekor entry is valid regardless of which registry
         # the image is later pulled from.
-        # Note: ECR repos are IMMUTABLE — push by SHA only, no :latest override.
+        # Note: ECR repos are IMMUTABLE — skip push if tag already exists.
         run: |
           ECR="${{ steps.ecr-login.outputs.registry }}"
-          docker pull ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
-          docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
-                      "${ECR}/sqlinj-frontend:${{ github.sha }}"
-          docker push "${ECR}/sqlinj-frontend:${{ github.sha }}"
+          if aws ecr describe-images \
+               --repository-name sqlinj-frontend \
+               --image-ids imageTag=${{ github.sha }} \
+               --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "sqlinj-frontend:${{ github.sha }} already in ECR — skipping push"
+          else
+            docker pull ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
+            docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
+                        "${ECR}/sqlinj-frontend:${{ github.sha }}"
+            docker push "${ECR}/sqlinj-frontend:${{ github.sha }}"
+          fi
 
       - name: Mirror backend to ECR
         run: |
           ECR="${{ steps.ecr-login.outputs.registry }}"
-          docker pull ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
-          docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
-                      "${ECR}/sqlinj-backend:${{ github.sha }}"
-          docker push "${ECR}/sqlinj-backend:${{ github.sha }}"
+          if aws ecr describe-images \
+               --repository-name sqlinj-backend \
+               --image-ids imageTag=${{ github.sha }} \
+               --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "sqlinj-backend:${{ github.sha }} already in ECR — skipping push"
+          else
+            docker pull ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
+            docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
+                        "${ECR}/sqlinj-backend:${{ github.sha }}"
+            docker push "${ECR}/sqlinj-backend:${{ github.sha }}"
+          fi
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 6 — DAST: OWASP ZAP
