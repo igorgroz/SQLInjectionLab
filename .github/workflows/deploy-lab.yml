@@ -27,7 +27,7 @@ concurrency:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
-  TF_VERSION: "1.7.5"
+  TF_VERSION: "1.10.5"
   CLUSTER_NAME: sqlinj-eks
 
 jobs:

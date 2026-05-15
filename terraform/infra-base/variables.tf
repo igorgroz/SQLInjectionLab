@@ -23,7 +23,7 @@ variable "github_branch" {
 variable "terraform_version" {
   description = "Terraform version installed inside CodeBuild for the destroy job"
   type        = string
-  default     = "1.7.5"
+  default     = "1.10.5"
 }
 
 variable "destroy_schedule_utc" {
