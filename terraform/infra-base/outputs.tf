@@ -41,3 +41,10 @@ output "ecr_docker_login_command" {
   description = "Authenticate Docker to ECR"
   value       = module.ecr.docker_login_command
 }
+
+# ─── GitHub Actions OIDC role ─────────────────────────────────────────────────
+
+output "github_actions_role_arn" {
+  description = "Copy this value into GitHub repo secret AWS_GITHUB_ACTIONS_ROLE_ARN (Settings → Secrets → Actions)"
+  value       = aws_iam_role.github_actions.arn
+}

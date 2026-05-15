@@ -63,10 +63,8 @@ attestation on each image digest. Predicate schema in
 8. **No automatic deploy on `git push`** — pipeline signs to GHCR but
    nothing pushes to ECR or updates `k8s/*/deployment.yaml`. Manual
    mirror + SHA bump + apply per release.
-9. **New `sast-review` and `trivy-review` environments need creation.**
-   GitHub repo → Settings → Environments → New environment → Required
-   reviewers: add yourself. Without these, gates auto-pass on findings.
-   `sca-review` and `dast-review` already exist.
+9. **(closed)** All four review environments exist with protection rules:
+   `sast-review`, `trivy-review`, `sca-review`, `dast-review`.
 10. **Kyverno cosigned admission policy not yet enforced.** Lab cluster
     accepts any signed image; prod policy should require
     `vuln-signoff/v1` attestation with all `gates.*.status` in
@@ -79,11 +77,10 @@ decide on next pass: `.DS_Store`, `backend/backend_dev_notes.md`,
 `CLAUDE.md`, root `package-lock.json`, `test.json`.
 
 ## Next actions — tomorrow's roadmap (ordered)
-1. **Rename pass — strip all `sqlinj` references.** Folders, files, the
-   project dir; then chase refs through Terraform, Helm values, k8s
-   manifests, phase docs. Live AWS identifiers (namespace `sqlinj`,
-   cluster `sqlinj-eks`, ECR repos, IRSA roles, SM secret paths) are a
-   deliberate separate sub-pass — they ripple into running infra.
+1. **(done — partial)** Rename pass complete for repo-text tokens. Live AWS
+   identifiers (namespace `sqlinj`, cluster `sqlinj-eks`, ECR repos, IRSA
+   roles, SM secret paths `sqlinj/backend/*`) are a deliberate separate
+   sub-pass — they ripple into running infra.
 2. **Pipeline → push directly to ECR** (closes #8). Signed images land
    in ECR, not just GHCR.
 3. **Automate app provisioning after infra provisioning.** Chain the

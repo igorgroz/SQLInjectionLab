@@ -103,6 +103,35 @@ resource "aws_eks_access_policy_association" "operator_admin" {
   }
 }
 
+# Grant the GitHub Actions OIDC role cluster-admin so the pipeline deploy job
+# can run kubectl set image + rollout status. The role lives in infra-base
+# (persists across cluster teardowns); the access entry is recreated here each
+# time the cluster is provisioned.
+data "aws_iam_role" "github_actions" {
+  name = "devseclab-github-actions"
+}
+
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = data.aws_iam_role.github_actions.arn
+  type          = "STANDARD"
+
+  tags = {
+    Project   = "devseclab"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_eks_access_policy_association" "github_actions" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_eks_access_entry.github_actions.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
 # =============================================================================
 # IAM/IRSA — Pod identity roles and Secrets Manager scaffolding
 # =============================================================================

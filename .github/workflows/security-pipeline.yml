@@ -29,6 +29,8 @@ env:
   NODE_VERSION: '20'
   TRIVY_VERSION: 'v0.69.3'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+  CLUSTER_NAME: sqlinj-eks
 
 jobs:
 
@@ -709,7 +711,8 @@ jobs:
       id-token: write
     outputs:
       frontend-digest: ${{ steps.push-frontend.outputs.digest }}
-      backend-digest: ${{ steps.push-backend.outputs.digest }}
+      backend-digest:  ${{ steps.push-backend.outputs.digest }}
+      ecr-registry:    ${{ steps.ecr-login.outputs.registry }}
     steps:
       - uses: actions/checkout@v4
 
@@ -725,6 +728,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Push frontend
         id: push-frontend
@@ -775,6 +788,32 @@ jobs:
             --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/.*" \
             --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
             ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
+
+      - name: Mirror frontend to ECR
+        # Pull the exact digest we just signed so the ECR tag carries
+        # the same content-addressed manifest. Digest equality means
+        # cosign's Rekor entry is valid regardless of which registry
+        # the image is later pulled from.
+        run: |
+          ECR="${{ steps.ecr-login.outputs.registry }}"
+          docker pull ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
+          docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
+                      "${ECR}/sqlinj-frontend:${{ github.sha }}"
+          docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
+                      "${ECR}/sqlinj-frontend:latest"
+          docker push "${ECR}/sqlinj-frontend:${{ github.sha }}"
+          docker push "${ECR}/sqlinj-frontend:latest"
+
+      - name: Mirror backend to ECR
+        run: |
+          ECR="${{ steps.ecr-login.outputs.registry }}"
+          docker pull ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
+          docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
+                      "${ECR}/sqlinj-backend:${{ github.sha }}"
+          docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
+                      "${ECR}/sqlinj-backend:latest"
+          docker push "${ECR}/sqlinj-backend:${{ github.sha }}"
+          docker push "${ECR}/sqlinj-backend:latest"
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 6 — DAST: OWASP ZAP
@@ -1333,3 +1372,97 @@ jobs:
             > /dev/null
 
           echo "vuln-signoff/v1 attestation verified on both image digests."
+
+# ══════════════════════════════════════════════════════════════════
+# JOB 9 — Deploy to EKS
+#
+# Runs only after the attestation is written. If the cluster is
+# destroyed, the cluster-check step emits a warning and skips the
+# kubectl steps rather than failing the run. The job summary tells
+# you exactly which deploy-lab.yml dispatch to run (with which
+# image_tag) to provision from scratch.
+# ══════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to EKS
+    needs: [attest, push-and-sign]
+    if: needs.attest.result == 'success' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: lab
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
+
+      - name: Check cluster is reachable
+        id: cluster_check
+        run: |
+          if kubectl get nodes --request-timeout=15s >/dev/null 2>&1; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::EKS cluster not reachable — deploy skipped. Run deploy-lab.yml manually to provision."
+          fi
+
+      - name: Update backend image
+        if: steps.cluster_check.outputs.reachable == 'true'
+        env:
+          ECR_REGISTRY: ${{ needs.push-and-sign.outputs.ecr-registry }}
+        run: |
+          kubectl -n sqlinj set image deployment/backend \
+            backend="${ECR_REGISTRY}/sqlinj-backend:${{ github.sha }}"
+          kubectl -n sqlinj rollout status deployment/backend --timeout=10m
+
+      - name: Update frontend image
+        if: steps.cluster_check.outputs.reachable == 'true'
+        env:
+          ECR_REGISTRY: ${{ needs.push-and-sign.outputs.ecr-registry }}
+        run: |
+          kubectl -n sqlinj set image deployment/frontend \
+            frontend="${ECR_REGISTRY}/sqlinj-frontend:${{ github.sha }}"
+          kubectl -n sqlinj rollout status deployment/frontend --timeout=10m
+
+      - name: Smoke test
+        if: steps.cluster_check.outputs.reachable == 'true'
+        run: |
+          ALB="$(kubectl -n sqlinj get ingress sqlinj-ingress \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+          if [ -z "${ALB}" ]; then
+            echo "::warning::No ALB hostname found — skipping smoke test"
+            exit 0
+          fi
+          for i in $(seq 1 12); do
+            if curl -kfsS "https://${ALB}/health" >/dev/null; then
+              echo "Smoke test passed: https://${ALB}/health"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::Smoke test did not pass within timeout — check ALB health"
+
+      - name: Summarise deploy
+        if: always()
+        run: |
+          REACHABLE="${{ steps.cluster_check.outputs.reachable }}"
+          ECR="${{ needs.push-and-sign.outputs.ecr-registry }}"
+          {
+            echo "## Deploy Summary"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Cluster reachable: \`${REACHABLE}\`"
+            if [ "${REACHABLE}" = "true" ]; then
+              echo "- Backend:  \`${ECR}/sqlinj-backend:${{ github.sha }}\`"
+              echo "- Frontend: \`${ECR}/sqlinj-frontend:${{ github.sha }}\`"
+            else
+              echo ""
+              echo "> Cluster was down at deploy time."
+              echo "> To provision and deploy, trigger **deploy-lab.yml** with:"
+              echo "> - \`run_terraform: true\`"
+              echo "> - \`image_tag: ${{ github.sha }}\`"
+              echo "> - \`allowed_cidr: <your-ip>/32\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

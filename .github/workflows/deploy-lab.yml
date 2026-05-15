@@ -1,0 +1,216 @@
+name: Deploy Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      allowed_cidr:
+        description: "CIDR allowed to reach the ALB (example: 1.2.3.4/32)"
+        required: true
+        default: "112.213.131.214/32"
+      image_tag:
+        description: "Optional ECR image tag override for backend/frontend (blank = use checked-in manifests)"
+        required: false
+        default: ""
+      run_terraform:
+        description: "Run terraform apply for infra-lab"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-lab
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+  TF_VERSION: "1.7.5"
+  CLUSTER_NAME: sqlinj-eks
+
+jobs:
+  deploy:
+    name: Provision And Deploy
+    runs-on: ubuntu-latest
+    environment: lab
+    outputs:
+      alb_hostname: ${{ steps.alb.outputs.hostname }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Terraform apply
+        if: ${{ inputs.run_terraform }}
+        working-directory: terraform/infra-lab
+        run: |
+          terraform init -input=false
+          terraform plan -out=lab.tfplan -input=false
+          terraform apply -input=false lab.tfplan
+
+      - name: Export Terraform outputs
+        id: tf
+        working-directory: terraform/infra-lab
+        run: |
+          echo "vpc_id=$(terraform output -raw vpc_id)" >> "$GITHUB_OUTPUT"
+          echo "albc_role_arn=$(terraform output -raw alb_controller_role_arn)" >> "$GITHUB_OUTPUT"
+          echo "backend_role_arn=$(terraform output -raw backend_role_arn)" >> "$GITHUB_OUTPUT"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
+          kubectl get nodes
+
+      - name: Ensure namespaces exist
+        run: kubectl apply -f k8s/eso/namespace.yaml
+
+      - name: Install AWS Load Balancer Controller
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update eks
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            -f helm/alb-controller/values.yaml \
+            --set vpcId="${{ steps.tf.outputs.vpc_id }}" \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ steps.tf.outputs.albc_role_arn }}"
+          kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=10m
+
+      - name: Install External Secrets Operator
+        run: |
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update external-secrets
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets \
+            --create-namespace \
+            -f helm/external-secrets/values.yaml
+          kubectl -n external-secrets rollout status deployment/external-secrets --timeout=10m
+          kubectl -n external-secrets rollout status deployment/external-secrets-webhook --timeout=10m
+          kubectl -n external-secrets rollout status deployment/external-secrets-cert-controller --timeout=10m
+
+      - name: Wait for ESO webhook endpoint
+        run: |
+          for i in $(seq 1 60); do
+            if kubectl -n external-secrets get endpoints external-secrets-webhook -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; then
+              echo "ESO webhook endpoint is ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Timed out waiting for external-secrets-webhook endpoint"
+          exit 1
+
+      - name: Apply ESO custom resources
+        run: |
+          kubectl apply -f k8s/eso/clustersecretstore.yaml
+          kubectl apply -f k8s/eso/externalsecret-db-password.yaml
+          kubectl apply -f k8s/eso/externalsecret-jwt-secret.yaml
+          kubectl get clustersecretstore aws-secrets-manager
+          kubectl -n sqlinj wait externalsecret/db-password --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
+          kubectl -n sqlinj wait externalsecret/jwt-secret --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
+          kubectl -n sqlinj get externalsecret,secret
+
+      - name: Deploy database
+        run: |
+          kubectl apply -f k8s/db/configmap.yaml
+          kubectl apply -f k8s/db/configmap-init.yaml
+          kubectl apply -f k8s/db/pvc.yaml
+          kubectl apply -f k8s/db/service.yaml
+          kubectl apply -f k8s/db/deployment.yaml
+          kubectl -n sqlinj rollout status deployment/db --timeout=10m
+
+      - name: Deploy backend
+        run: |
+          kubectl apply -f k8s/backend/serviceaccount.yaml
+          kubectl apply -f k8s/backend/configmap.yaml
+          kubectl apply -f k8s/backend/service.yaml
+          kubectl apply -f k8s/backend/deployment.yaml
+          kubectl -n sqlinj rollout status deployment/backend --timeout=10m
+
+      - name: Deploy frontend
+        run: |
+          kubectl apply -f k8s/frontend/service.yaml
+          kubectl apply -f k8s/frontend/deployment.yaml
+          kubectl -n sqlinj rollout status deployment/frontend --timeout=10m
+
+      - name: Optionally override backend and frontend image tags
+        if: ${{ inputs.image_tag != '' }}
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          kubectl -n sqlinj set image deployment/backend  backend="${REGISTRY}/sqlinj-backend:${{ inputs.image_tag }}"
+          kubectl -n sqlinj set image deployment/frontend frontend="${REGISTRY}/sqlinj-frontend:${{ inputs.image_tag }}"
+          kubectl -n sqlinj rollout status deployment/backend --timeout=10m
+          kubectl -n sqlinj rollout status deployment/frontend --timeout=10m
+
+      - name: Apply ingress
+        run: |
+          kubectl apply -f k8s/ingress.yaml
+          kubectl -n sqlinj annotate ingress sqlinj-ingress \
+            alb.ingress.kubernetes.io/inbound-cidrs="${{ inputs.allowed_cidr }}" \
+            --overwrite
+
+      - name: Wait for ALB hostname
+        id: alb
+        run: |
+          for i in $(seq 1 90); do
+            HOSTNAME="$(kubectl -n sqlinj get ingress sqlinj-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            if [ -n "${HOSTNAME}" ]; then
+              echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
+              echo "ALB hostname: ${HOSTNAME}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Timed out waiting for ALB hostname"
+          exit 1
+
+      - name: Smoke test ALB health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl -kfsS "https://${{ steps.alb.outputs.hostname }}/health" >/dev/null; then
+              echo "ALB health endpoint is reachable"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::ALB health endpoint did not return 200 yet"
+
+      - name: Summarise deployment
+        run: |
+          {
+            echo "## Lab Deploy Summary"
+            echo ""
+            echo "- Cluster: \`${CLUSTER_NAME}\`"
+            echo "- Region: \`${AWS_REGION}\`"
+            echo "- Allowed CIDR: \`${{ inputs.allowed_cidr }}\`"
+            echo "- ALB hostname: \`${{ steps.alb.outputs.hostname }}\`"
+            echo ""
+            echo "### Next manual step"
+            echo "Update the GoDaddy CNAME for \`lab.oznetsecure.com.au\` to:"
+            echo ""
+            echo "\`${{ steps.alb.outputs.hostname }}\`"
+            if [ -n "${{ inputs.image_tag }}" ]; then
+              echo ""
+              echo "- Image tag override applied: \`${{ inputs.image_tag }}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
