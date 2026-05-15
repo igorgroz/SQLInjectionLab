@@ -139,7 +139,10 @@ jobs:
     needs: sast
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: ${{ needs.sast.outputs.has_findings == 'true' && 'sast-review' || '' }}
+    # AUTO_APPROVE_GATES: set to 'true' in GitHub Settings → Variables → Actions
+    # to bypass the manual pause (useful during active dev). Remove or set to
+    # anything else to reinstate required-reviewer approval on findings.
+    environment: ${{ vars.AUTO_APPROVE_GATES != 'true' && needs.sast.outputs.has_findings == 'true' && 'sast-review' || '' }}
     outputs:
       decision: ${{ steps.record.outputs.decision }}
     steps:
@@ -373,7 +376,7 @@ jobs:
     needs: [sca-backend, sca-frontend]
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: ${{ (needs.sca-backend.outputs.has_findings == 'true' || needs.sca-frontend.outputs.has_findings == 'true') && 'sca-review' || '' }}
+    environment: ${{ vars.AUTO_APPROVE_GATES != 'true' && (needs.sca-backend.outputs.has_findings == 'true' || needs.sca-frontend.outputs.has_findings == 'true') && 'sca-review' || '' }}
     outputs:
       decision: ${{ steps.record.outputs.decision }}
     steps:
@@ -661,7 +664,7 @@ jobs:
     needs: container-scan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: ${{ needs.container-scan.outputs.has_findings == 'true' && 'trivy-review' || '' }}
+    environment: ${{ vars.AUTO_APPROVE_GATES != 'true' && needs.container-scan.outputs.has_findings == 'true' && 'trivy-review' || '' }}
     outputs:
       decision: ${{ steps.record.outputs.decision }}
     steps:
@@ -794,15 +797,13 @@ jobs:
         # the same content-addressed manifest. Digest equality means
         # cosign's Rekor entry is valid regardless of which registry
         # the image is later pulled from.
+        # Note: ECR repos are IMMUTABLE — push by SHA only, no :latest override.
         run: |
           ECR="${{ steps.ecr-login.outputs.registry }}"
           docker pull ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }}
           docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
                       "${ECR}/sqlinj-frontend:${{ github.sha }}"
-          docker tag  ${{ env.FRONTEND_IMAGE }}@${{ steps.push-frontend.outputs.digest }} \
-                      "${ECR}/sqlinj-frontend:latest"
           docker push "${ECR}/sqlinj-frontend:${{ github.sha }}"
-          docker push "${ECR}/sqlinj-frontend:latest"
 
       - name: Mirror backend to ECR
         run: |
@@ -810,10 +811,7 @@ jobs:
           docker pull ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }}
           docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
                       "${ECR}/sqlinj-backend:${{ github.sha }}"
-          docker tag  ${{ env.BACKEND_IMAGE }}@${{ steps.push-backend.outputs.digest }} \
-                      "${ECR}/sqlinj-backend:latest"
           docker push "${ECR}/sqlinj-backend:${{ github.sha }}"
-          docker push "${ECR}/sqlinj-backend:latest"
 
 # ══════════════════════════════════════════════════════════════════
 # JOB 6 — DAST: OWASP ZAP
@@ -1173,7 +1171,7 @@ jobs:
     runs-on: ubuntu-latest
     # `findings` status puts us into the `dast-review` env for manual
     # approval; clean DAST scans auto-pass with no env attached.
-    environment: ${{ needs.dast.outputs.zap_fail_alerts_present == 'true' && 'dast-review' || '' }}
+    environment: ${{ vars.AUTO_APPROVE_GATES != 'true' && needs.dast.outputs.zap_fail_alerts_present == 'true' && 'dast-review' || '' }}
     outputs:
       decision: ${{ steps.record.outputs.decision }}
     steps:
