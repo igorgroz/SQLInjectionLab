@@ -1,0 +1,124 @@
+# =============================================================================
+# ClusterPolicy — dsl-verify-images
+#
+# PURPOSE
+#   Enforces supply-chain integrity for all Pods in the dsl namespace.
+#   Two checks run at admission time:
+#     1. Cosign signature — the image must have been signed by the
+#        security-pipeline GitHub Actions workflow using keyless signing
+#        (Sigstore OIDC + Rekor transparency log).
+#     2. vuln-signoff/v1 attestation — the image must carry the structured
+#        gate-outcome attestation produced by the pipeline's `attest` job,
+#        and every gate (SAST, SCA, Trivy, DAST) must have status in
+#        [clean, accepted, skipped]. A Pod referencing an image that never
+#        went through the pipeline, or whose gates were not resolved, is
+#        rejected before it is scheduled.
+#
+# SCOPE
+#   imageReferences patterns limit enforcement to dsl-backend and dsl-frontend
+#   images from GHCR and ECR. The postgres image used by the db Pod does not
+#   match either pattern and is not subject to this policy.
+#
+# MODE
+#   validationFailureAction: Enforce — non-compliant Pods are rejected, not
+#   just logged. To switch to audit-only (log violations, allow all Pods),
+#   change this to Audit. Useful when first rolling out the policy against
+#   an existing workload.
+#
+# KEYLESS SIGNING
+#   The pipeline signs images without a long-lived private key. Instead,
+#   cosign uses the GitHub Actions OIDC token to obtain a short-lived
+#   certificate from Sigstore's Fulcio CA, records the signing event in
+#   the Rekor append-only transparency log, and discards the ephemeral key.
+#   Verification requires only the Rekor URL and the expected certificate
+#   identity (the workflow URL) — no key material needs to be stored in the
+#   cluster. This is the SLSA keyless signing model.
+# =============================================================================
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: dsl-verify-images
+  annotations:
+    policies.kyverno.io/title: "Verify cosign signature and vuln-signoff attestation"
+    policies.kyverno.io/category: "Supply Chain Security"
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >
+      Rejects any Pod in the dsl namespace whose images have not been signed
+      by the security-pipeline workflow or whose vuln-signoff/v1 attestation
+      is missing or has unresolved gate outcomes.
+spec:
+  validationFailureAction: Enforce
+  background: false   # only evaluate at admission time, not on existing resources
+  rules:
+
+  - name: verify-app-image-signature-and-attestation
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - dsl
+
+    verifyImages:
+    - imageReferences:
+      # Only enforce on the app images. postgres (db Pod) does not match and
+      # is not subject to this policy. Add registries here as the app grows.
+      - "ghcr.io/igorgroz/dsl-*"
+      - "510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-*"
+
+      # Don't rewrite image references to digests — the pipeline already pins
+      # by SHA tag. Setting both to false keeps manifests readable.
+      mutateDigest: false
+      verifyDigest: false
+
+      # --- Signature verification ---
+      # The certificate identity regexp matches any workflow file in the repo.
+      # The issuer pins to GitHub Actions OIDC. Rekor URL is the public
+      # Sigstore transparency log.
+      attestors:
+      - count: 1
+        entries:
+        - keyless:
+            subjectRegExp: "https://github.com/igorgroz/devseclab/.github/workflows/.*"
+            issuer: "https://token.actions.githubusercontent.com"
+            rekor:
+              url: https://rekor.sigstore.dev
+
+      # --- Attestation verification ---
+      # Verifies the vuln-signoff/v1 predicate exists and gate statuses are
+      # in the allowed set. The predicate field in JMESPath expressions maps
+      # to the decoded attestation payload.
+      attestations:
+      - predicateType: "https://oznetsecure.com.au/attestations/vuln-signoff/v1"
+        attestors:
+        - count: 1
+          entries:
+          - keyless:
+              subjectRegExp: "https://github.com/igorgroz/devseclab/.github/workflows/.*"
+              issuer: "https://token.actions.githubusercontent.com"
+              rekor:
+                url: https://rekor.sigstore.dev
+
+        conditions:
+        - all:
+          - key: "{{ predicate.gates.sast.status }}"
+            operator: AnyIn
+            value: ["clean", "accepted", "skipped"]
+            message: "SAST gate status '{{ predicate.gates.sast.status }}' is not allowed"
+
+          - key: "{{ predicate.gates.sca.status }}"
+            operator: AnyIn
+            value: ["clean", "accepted", "skipped"]
+            message: "SCA gate status '{{ predicate.gates.sca.status }}' is not allowed"
+
+          - key: "{{ predicate.gates.trivy.status }}"
+            operator: AnyIn
+            value: ["clean", "accepted", "skipped"]
+            message: "Trivy gate status '{{ predicate.gates.trivy.status }}' is not allowed"
+
+          - key: "{{ predicate.gates.dast.status }}"
+            operator: AnyIn
+            value: ["clean", "accepted", "skipped"]
+            message: "DAST gate status '{{ predicate.gates.dast.status }}' is not allowed"
