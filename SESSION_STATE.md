@@ -57,9 +57,9 @@ deleted). Ready for clean deploy-lab.yml run next session.
    (Google Online Boutique / Weaveworks Sock Shop).
 
 ## Lab state
-**Cluster UP** (not destroyed this session — left running for next session pickup).
-Kyverno namespace and webhook configs manually deleted from cluster.
-infra-base intact: ECR repos `dsl-backend`/`dsl-frontend` with signed images.
+**Destroyed.** 61 resources destroyed via stoplab.sh.
+infra-base intact: ECR repos `dsl-backend`/`dsl-frontend` with signed images,
+SM entries, ACM cert, Route 53 zone. Next spin-up has working images in ECR.
 
 ## Key paths
 - Kyverno policy: `k8s/kyverno/clusterpolicy-image-verify.yaml`
