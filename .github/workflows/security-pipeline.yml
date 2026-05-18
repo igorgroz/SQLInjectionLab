@@ -1423,6 +1423,10 @@ jobs:
         env:
           ECR_REGISTRY: ${{ needs.push-and-sign.outputs.ecr-registry }}
         run: |
+          if ! kubectl -n dsl get deployment backend --request-timeout=10s >/dev/null 2>&1; then
+            echo "::warning::backend deployment not found in dsl namespace — workloads not provisioned yet. Run deploy-lab.yml first."
+            exit 0
+          fi
           kubectl -n dsl set image deployment/backend \
             backend="${ECR_REGISTRY}/dsl-backend:${{ github.sha }}"
           kubectl -n dsl rollout status deployment/backend --timeout=10m
@@ -1432,6 +1436,10 @@ jobs:
         env:
           ECR_REGISTRY: ${{ needs.push-and-sign.outputs.ecr-registry }}
         run: |
+          if ! kubectl -n dsl get deployment frontend --request-timeout=10s >/dev/null 2>&1; then
+            echo "::warning::frontend deployment not found in dsl namespace — workloads not provisioned yet. Run deploy-lab.yml first."
+            exit 0
+          fi
           kubectl -n dsl set image deployment/frontend \
             frontend="${ECR_REGISTRY}/dsl-frontend:${{ github.sha }}"
           kubectl -n dsl rollout status deployment/frontend --timeout=10m
