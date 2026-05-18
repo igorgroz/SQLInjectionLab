@@ -4,124 +4,78 @@
 > Keep it under ~80 lines. Detailed runbooks live in PHASE*.md.
 
 ## Project framing
-DevSecOps platform lab: a hardened CI/CD supply-chain pipeline and EKS
-runtime built around a black-box **target application under test**. All
-work here is defensive — detection, hardening, signing, and remediation.
+DevSecOps platform lab: hardened CI/CD supply-chain pipeline and EKS runtime.
+Learning exercise — app has no practical value; all value is in DevSecOps and
+modern app security concepts built around it.
 
 ## Current phase
-**3b-4 + pipeline gate-unification (complete).** Lab destroyed. Full
-pipeline operational: SAST → SCA → build → Trivy → push GHCR → sign →
-mirror ECR → attest → deploy (cluster-aware). Gates auto-approve via
-`AUTO_APPROVE_GATES=true` repo variable. deploy-lab.yml provisions full
-stack from scratch via workflow_dispatch.
+**Kyverno admission policy — in progress.** Cluster up (not destroyed).
+Policy manifest written and committed. deploy-lab.yml Kyverno install/wait
+logic iterated through multiple fixes; blocked on Kyverno TLS initialisation
+race condition. Cluster manually cleaned (kyverno namespace + webhook configs
+deleted). Ready for clean deploy-lab.yml run next session.
 
 ## Last commit
-`chore(rename): sqlinj → dsl across all live repo files` (May 18 2026)
+`fix(deploy-lab): wait for Kyverno TLS secret and webhook config` (May 18 2026)
 
 ## Resolved this session
-- **Rename pass complete (repo-text + live files)** — all `sqlinj` tokens
-  replaced with `dsl` across k8s manifests, Terraform, Helm values,
-  GitHub Actions workflows, and bin scripts. Live AWS infra identifiers
-  (ECR repos, IRSA roles, SM paths) rename on next cluster spin-up.
-- **GitHub Actions OIDC role** (`devseclab-github-actions`) created in
-  infra-base via Terraform. Survives nightly destroy. ARN set as
-  `AWS_GITHUB_ACTIONS_ROLE_ARN` repo secret.
-- **ECR push** added to `push-and-sign` job — mirrors signed images to ECR
-  by digest (SHA tag only, IMMUTABLE repos). Skips if tag already exists.
-- **deploy job (JOB 9)** added to security-pipeline — runs `kubectl set image`
-  + rollout after attest succeeds. Gracefully skips if cluster is down.
-- **deploy-lab.yml** added — full provision-and-deploy via workflow_dispatch
-  (terraform → ALBC → ESO → workloads → ingress → ALB → port-forward smoke test).
-- **AUTO_APPROVE_GATES** repo variable — bypasses all four manual review
-  gates during active dev. Delete to reinstate manual approval.
-- **EKS access entry** for GitHub Actions role added to infra-lab.
-- **Smoke test** replaced with kubectl port-forward (ALB locked to operator IP).
-- **#1 closed** — ALBC vpcId now flows from terraform output in deploy-lab.yml.
-- **#8 closed** — pipeline pushes to ECR and deploys automatically.
-- **#9 confirmed** — all four review environments verified in GitHub.
+- **Rename pass complete** — all `sqlinj` → `dsl` across repo + live AWS.
+  ECR repos recreated as `dsl-backend`/`dsl-frontend` (Terraform-managed,
+  scan_on_push=true). Old `sqlinj-*` repos destroyed. Pipeline green.
+- **ECR state bucket refs** reverted to real `sqlinj-tfstate-*` bucket name
+  (rename touched backend.tf — live bucket can't be renamed in-place).
+- **Kyverno ClusterPolicy** written: `k8s/kyverno/clusterpolicy-image-verify.yaml`
+  — keyless cosign signature + vuln-signoff/v1 attestation enforced on all
+  Pods in the `dsl` namespace. postgres (db Pod) excluded via imageReferences.
+- **deploy-lab.yml** updated: Kyverno Helm install + webhook wait + policy apply
+  steps added before workload deployments.
+- **security-pipeline deploy job** fixed: graceful skip if backend/frontend
+  Deployments not yet provisioned (`deployment not found` was hard failing).
+- **deployment.yaml images** updated from deleted `f814ac7` (sqlinj-backend ECR)
+  to `af16635` (exists in new dsl-backend/dsl-frontend ECR repos, signed).
 
 ## Open issues
-1. **ALBC vpcId requires manual `--set` every cluster recreate.** Root
-   cause: node-group launch template ships `http_put_response_hop_limit=1`
-   (EKS default, hardens pod→IMDS-credential-theft), but the VPC CNI
-   namespace traversal counts as one hop, so the IMDSv2 token response
-   never reaches pods. ALBC can't auto-discover vpcId, hence the helm
-   `--set vpcId="$(tf output -raw vpc_id)"` workaround.
-   - **Don't just bump to hop_limit=2.** That re-opens pod→IMDS for the
-     whole node group. Only safe if `http_tokens="required"` (IMDSv2
-     enforced) AND NetworkPolicy denies pod egress to
-     `169.254.169.254/32` in `sqlinj` (and any future app namespace).
-   - **Preferred fix:** generate a `cluster-info` ConfigMap from
-     terraform (`module.vpc.vpc_id`) and point ALBC's helm values at it
-     via env-var substitution. Same UX as IMDS auto-discovery, value
-     flows through cluster state instead of IMDS, no hop_limit change,
-     generalises to any other pod that needs to know its VPC.
-2. **(closed)** CORS-fix image unsigned — current `f814ac7` is the first
-   pipeline-signed image actually deployed.
-3. **(closed)** Ingress TLS codified.
-5. **(closed)** S3-native state locking.
-6. **(closed)** ECR durability across teardowns.
-7. **ALB allowlist still tied to one residential /32** — `bin/whitelist-me.sh`
-   reduces toil; long-term fix is AWS Verified Access or WireGuard endpoint.
-8. **No automatic deploy on `git push`** — pipeline signs to GHCR but
-   nothing pushes to ECR or updates `k8s/*/deployment.yaml`. Manual
-   mirror + SHA bump + apply per release.
-9. **(closed)** All four review environments exist with protection rules:
-   `sast-review`, `trivy-review`, `sca-review`, `dast-review`.
-10. **Kyverno cosigned admission policy not yet enforced.** Lab cluster
-    accepts any signed image; prod policy should require
-    `vuln-signoff/v1` attestation with all `gates.*.status` in
-    `[clean, accepted]` (with prod-specific further restrictions on
-    `accepted`). This is the consumer side of the attestation work.
+1. **Kyverno TLS race condition** — admission controller pod becomes Ready before
+   cert manager writes `kyverno-svc.kyverno.svc.kyverno-tls-pair` secret and
+   webhook controller registers MutatingWebhookConfiguration. Wait logic now
+   checks all three conditions; needs a clean cluster run to validate.
+   **Cluster state:** kyverno namespace deleted, all MutatingWebhookConfigurations
+   deleted manually. Ready for fresh deploy-lab.yml with terraform checked.
+2. **ALBC vpcId pin** — hop_limit=1 prevents IMDS auto-discovery. Preferred fix:
+   cluster-info ConfigMap from Terraform VPC output.
+7. **ALB allowlist /32** — `bin/whitelist-me.sh` reduces toil.
+10. **Kyverno enforcement** — policy in place, needs successful deploy to validate.
 
-## Housekeeping pile
-`.DS_Store` — add to `.gitignore` (currently showing as modified every session).
+## Next actions — start of next session
+1. **Run deploy-lab.yml with terraform checked** — fresh cluster, clean Kyverno
+   install, validate admission policy end-to-end (signed image passes, unsigned
+   image rejected).
+2. **NetworkPolicies + PSS** on the `dsl` namespace.
+3. **Node-group hop-limit fix** — cluster-info ConfigMap, drop vpcId pin.
+4. **Enterprise platform track** — Kong, Istio mTLS, CloudFront + WAF.
+   Decision pending: build new microservices app or use reference workload
+   (Google Online Boutique / Weaveworks Sock Shop).
 
-## Next actions — roadmap (ordered)
-1. **Live AWS infra rename** — ECR repos, IRSA roles (`dsl-eks-eso-role`,
-   `dsl-eks-backend-role`), SM secret paths `dsl/backend/*`. Repo already
-   updated; AWS resources recreate on next spin-up (ECR needs explicit rename
-   or delete+recreate — images are in GHCR as fallback).
-2. **Kyverno cosigned admission policy** (#10) — enforce `vuln-signoff/v1`
-   attestation at admission time. Consumer side of the attestation work.
-3. **NetworkPolicies + PSS** on the `dsl` namespace.
-4. **Node-group hop-limit fix** (#1 sub-issue) — cluster-info ConfigMap from
-   Terraform VPC output; drop manual `--set vpcId=...` from deploy-lab.yml.
-5. **Enterprise platform track** — Kong ingress controller, Istio service mesh
-   (mTLS east-west, AuthorizationPolicy), CloudFront + WAF. Microservices
-   split of the app (or swap in a reference workload) to give the mesh
-   meaningful traffic to demonstrate.
-
-## Still-open work (fold in as capacity allows)
-- Kyverno cosigned admission policy verifying `vuln-signoff/v1` (#10).
-- Node-group hop-limit fix, drop vpcId pin (#1 sub-issue).
-- Runtime hardening: NetworkPolicies + PSS on the `dsl` namespace.
-- GoDaddy CNAME update needed after each cluster recreate (new ALB hostname).
-- `.DS_Store` — add to `.gitignore`.
-
-## Lab teardown state
-**Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy
-CodeBuild, **ECR repos with `f814ac7` images**, AWS SM entries, ACM cert,
-Route 53 zone. Tomorrow's spin-up has working images already in ECR.
+## Lab state
+**Cluster UP** (not destroyed this session — left running for next session pickup).
+Kyverno namespace and webhook configs manually deleted from cluster.
+infra-base intact: ECR repos `dsl-backend`/`dsl-frontend` with signed images.
 
 ## Key paths
+- Kyverno policy: `k8s/kyverno/clusterpolicy-image-verify.yaml`
 - Phase docs: `PHASE2.md`, `PHASE3B3.md`
-- Security decisions: `LAB_SECURITY_DECISIONS.md`, `COSIGN_SIGNING_DEEP_DIVE.md`
-- Architecture: `Architecture.md`
 - Manifests: `k8s/{backend,frontend,db,eso}/`, `k8s/ingress.yaml`
 - Helm values: `helm/{alb-controller,external-secrets}/values.yaml`
-- IaC: `terraform/infra-lab/`, `terraform/infra-base/` (now owns ECR)
-- Tools: `bin/whitelist-me.sh`
-- Pipeline: `.github/workflows/security-pipeline.yml`,
-  `.github/attestations/vuln-signoff.schema.json`,
-  `{backend,frontend}/audit-exceptions.json`, `trivy-exceptions.json`
+- IaC: `terraform/infra-lab/`, `terraform/infra-base/`
+- Pipeline: `.github/workflows/security-pipeline.yml`, `deploy-lab.yml`
+- Attestation schema: `.github/attestations/vuln-signoff.schema.json`
 
 ## AWS / cluster identifiers
 - Account `510151297987`, region `ap-southeast-2`
-- EKS cluster `sqlinj-eks` (v1.35, AL2023) — destroyed
-- ECR: `510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-{backend,frontend}`
-- Current image SHA: `f814ac7` (pipeline-signed, in ECR + GHCR)
-- IRSA: `sqlinj-eks-eso-role`, `sqlinj-backend-sa`, ALBC, EBS CSI
-- Secrets: `sqlinj/backend/db-password`, `sqlinj/backend/jwt-secret`
+- EKS cluster `dsl-eks` (v1.35, AL2023) — **UP**
+- ECR: `510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-{backend,frontend}`
+- Current image SHA: `af16635` (signed, in ECR + GHCR)
+- IRSA: `dsl-eks-eso-role`, `dsl-backend-sa` (names on next spin-up)
+- Secrets: `sqlinj/backend/db-password`, `sqlinj/backend/jwt-secret` (SM rename pending)
 - Entra: tenant `487f7bd9-…`, SPA `a6960366-…`, API `af63b7cb-…` (v2 tokens)
 - Lab URL: `https://lab.oznetsecure.com.au`
