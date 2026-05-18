@@ -133,12 +133,12 @@ jobs:
         run: |
           helm repo add kyverno https://kyverno.github.io/kyverno/
           helm repo update kyverno
-          # Clean up any stuck hook jobs from a previous failed install/upgrade.
-          # Helm post-upgrade hooks create Jobs; if a prior run failed mid-flight
-          # the Job lingers and blocks the next upgrade attempt.
-          kubectl -n kyverno delete job --all --ignore-not-found=true 2>/dev/null || true
-          # Single-replica install — sufficient for the lab, reduces node pressure.
-          # In production, use the default 3 replicas for HA of the admission webhook.
+          # --no-hooks bypasses Kyverno's post-upgrade hook Jobs (kyverno-clean-reports
+          # and friends). These hooks run internal report cleanup and are safe to skip
+          # in a lab — they are not required for the admission webhook to function.
+          # Without --no-hooks, a prior failed deploy-lab.yml run leaves a stuck hook
+          # Job in the kyverno namespace that blocks every subsequent helm upgrade.
+          # Single-replica: sufficient for the lab; use 3 replicas in production for HA.
           helm upgrade --install kyverno kyverno/kyverno \
             --namespace kyverno \
             --create-namespace \
@@ -147,7 +147,7 @@ jobs:
             --set backgroundController.replicas=1 \
             --set cleanupController.replicas=1 \
             --set reportsController.replicas=1 \
-            --cleanup-on-fail \
+            --no-hooks \
             --wait --timeout=10m
           kubectl -n kyverno get pods
 
