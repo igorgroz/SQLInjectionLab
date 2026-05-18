@@ -26,7 +26,7 @@ spec:
       serviceAccountName: dsl-backend-sa
       containers:
         - name: backend
-          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-backend:f814ac7a93cef1e0619c456193c93c13d4cda863
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-backend:af166356501ace2dce3b3655aefda8b4eff5cf51
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
