@@ -88,7 +88,7 @@ resource "aws_eks_access_entry" "operator_admin" {
   type          = "STANDARD"
 
   tags = {
-    Project   = "sqlinj"
+    Project   = "dsl"
     ManagedBy = "terraform"
   }
 }
@@ -144,9 +144,9 @@ module "iam_irsa" {
   oidc_provider_url = module.eks.oidc_provider_url
   aws_region        = var.aws_region
 
-  app_namespace = "sqlinj"
+  app_namespace = "dsl"
   eso_namespace = "external-secrets"
 
   eso_service_account     = "external-secrets-sa"
-  backend_service_account = "sqlinj-backend-sa"
+  backend_service_account = "dsl-backend-sa"
 }

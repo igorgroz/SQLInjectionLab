@@ -11,7 +11,7 @@ variable "aws_region" {
 variable "cluster_name" {
   description = "EKS cluster name — also used as a prefix for most resource names"
   type        = string
-  default     = "sqlinj-eks"
+  default     = "dsl-eks"
 }
 
 variable "cluster_version" {

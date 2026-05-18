@@ -18,7 +18,7 @@ data "aws_region" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   region       = data.aws_region.current.name
-  state_bucket = "sqlinj-tfstate-${local.account_id}"
+  state_bucket = "dsl-tfstate-${local.account_id}"
 }
 
 # =============================================================================
@@ -59,7 +59,7 @@ data "aws_iam_policy_document" "codebuild_assume" {
 }
 
 resource "aws_iam_role" "codebuild_destroy" {
-  name               = "sqlinj-codebuild-nightly-destroy"
+  name               = "dsl-codebuild-nightly-destroy"
   assume_role_policy = data.aws_iam_policy_document.codebuild_assume.json
   description        = "CodeBuild role for nightly terraform destroy of infra-lab"
 }
@@ -92,7 +92,7 @@ data "aws_iam_policy_document" "codebuild_tfstate" {
   }
 
   # NOTE: previously a "TerraformStateLock" statement granted dynamodb:*
-  # against sqlinj-tfstate-lock. Removed when both stacks moved to S3-native
+  # against dsl-tfstate-lock. Removed when both stacks moved to S3-native
   # locking via use_lockfile (see backend.tf). The lock object is now a
   # sibling of the state file inside the same S3 bucket — the
   # TerraformStateBucket statement above already covers it.
@@ -106,8 +106,8 @@ data "aws_iam_policy_document" "codebuild_tfstate" {
       "logs:PutLogEvents",
     ]
     resources = [
-      "arn:aws:logs:${local.region}:${local.account_id}:log-group:/aws/codebuild/sqlinj-nightly-destroy",
-      "arn:aws:logs:${local.region}:${local.account_id}:log-group:/aws/codebuild/sqlinj-nightly-destroy:*",
+      "arn:aws:logs:${local.region}:${local.account_id}:log-group:/aws/codebuild/dsl-nightly-destroy",
+      "arn:aws:logs:${local.region}:${local.account_id}:log-group:/aws/codebuild/dsl-nightly-destroy:*",
     ]
   }
 }
@@ -127,7 +127,7 @@ resource "aws_iam_role_policy" "codebuild_tfstate" {
 # diagnose a failed nightly destroy.
 
 resource "aws_cloudwatch_log_group" "codebuild_destroy" {
-  name              = "/aws/codebuild/sqlinj-nightly-destroy"
+  name              = "/aws/codebuild/dsl-nightly-destroy"
   retention_in_days = 14
 }
 
@@ -136,7 +136,7 @@ resource "aws_cloudwatch_log_group" "codebuild_destroy" {
 # Accepted risk (lab): no KMS CMK encryption. See LAB_SECURITY_DECISIONS.md TF-03.
 # =============================================================================
 resource "aws_codebuild_project" "nightly_destroy" {
-  name          = "sqlinj-nightly-destroy"
+  name          = "dsl-nightly-destroy"
   description   = "Nightly terraform destroy of infra-lab — prevents runaway lab costs"
   service_role  = aws_iam_role.codebuild_destroy.arn
   build_timeout = var.codebuild_timeout_minutes
@@ -243,7 +243,7 @@ data "aws_iam_policy_document" "eventbridge_assume" {
 }
 
 resource "aws_iam_role" "eventbridge_codebuild" {
-  name               = "sqlinj-eventbridge-start-codebuild"
+  name               = "dsl-eventbridge-start-codebuild"
   assume_role_policy = data.aws_iam_policy_document.eventbridge_assume.json
   description        = "Allows EventBridge to start the nightly CodeBuild destroy job"
 }
@@ -268,13 +268,13 @@ resource "aws_iam_role_policy" "eventbridge_codebuild" {
 # =============================================================================
 
 resource "aws_cloudwatch_event_rule" "nightly_destroy" {
-  name                = "sqlinj-nightly-destroy"
+  name                = "dsl-nightly-destroy"
   description         = "Trigger terraform destroy of infra-lab at 22:00 AEST nightly"
   schedule_expression = var.destroy_schedule_utc
 
   # ENABLED by default. Set to DISABLED here to avoid an accidental destroy
   # before you've validated infra-lab. Manually enable via console or
-  # `aws events enable-rule --name sqlinj-nightly-destroy` when ready.
+  # `aws events enable-rule --name dsl-nightly-destroy` when ready.
   state = "DISABLED"
 }
 
@@ -383,14 +383,14 @@ resource "aws_iam_role_policy_attachment" "github_actions_admin" {
 module "ecr" {
   source = "./modules/ecr"
 
-  cluster_name = "sqlinj-eks"   # tagging only — repos themselves are stack-agnostic
+  cluster_name = "dsl-eks"   # tagging only — repos themselves are stack-agnostic
 
   repositories = {
-    "sqlinj-frontend" = {
+    "dsl-frontend" = {
       image_tag_mutability = "IMMUTABLE"
       scan_on_push         = true
     }
-    "sqlinj-backend" = {
+    "dsl-backend" = {
       image_tag_mutability = "IMMUTABLE"
       scan_on_push         = true
     }

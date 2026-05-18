@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16
-    container_name: sqlinj-db
+    container_name: dsl-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: devseclab
@@ -20,8 +20,8 @@ services:
       start_period: 10s
 
   backend:
-    container_name: sqlinj-backend
-    image: ghcr.io/igorgroz/sqlinj-backend:latest
+    container_name: dsl-backend
+    image: ghcr.io/igorgroz/dsl-backend:latest
     platform: linux/amd64
     build:
       context: ./backend
@@ -36,8 +36,8 @@ services:
         condition: service_healthy
 
   frontend:
-    container_name: sqlinj-frontend
-    image: ghcr.io/igorgroz/sqlinj-frontend:latest
+    container_name: dsl-frontend
+    image: ghcr.io/igorgroz/dsl-frontend:latest
     platform: linux/amd64
     build:
       context: ./frontend

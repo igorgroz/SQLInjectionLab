@@ -116,7 +116,7 @@ resource "null_resource" "predestroy_ingress_cleanup" {
       # Belt-and-suspenders: directly delete any ALB still tagged for this cluster
       echo "[predestroy] Hunting for orphan ALBs..."
       for ALB_ARN in $(aws elbv2 describe-load-balancers --no-cli-pager \
-                         --query "LoadBalancers[?contains(LoadBalancerName,'sqlinj')].LoadBalancerArn" \
+                         --query "LoadBalancers[?contains(LoadBalancerName,'dsl')].LoadBalancerArn" \
                          --output text 2>/dev/null); do
         echo "[predestroy] Force-deleting orphan ALB: $ALB_ARN"
         aws elbv2 delete-load-balancer --no-cli-pager --load-balancer-arn "$ALB_ARN" 2>/dev/null
@@ -124,14 +124,14 @@ resource "null_resource" "predestroy_ingress_cleanup" {
 
       # Same for orphan target groups (deletable once their ALB is gone)
       for TG_ARN in $(aws elbv2 describe-target-groups --no-cli-pager \
-                        --query "TargetGroups[?starts_with(TargetGroupName,'k8s-sqlinj-')].TargetGroupArn" \
+                        --query "TargetGroups[?starts_with(TargetGroupName,'k8s-dsl-')].TargetGroupArn" \
                         --output text 2>/dev/null); do
         aws elbv2 delete-target-group --no-cli-pager --target-group-arn "$TG_ARN" 2>/dev/null
       done
 
       # Same for ALBC-created security groups in the VPC
       VPC_ID=$(aws ec2 describe-vpcs --no-cli-pager \
-                 --filters Name=tag:Name,Values=sqlinj-eks-vpc \
+                 --filters Name=tag:Name,Values=dsl-eks-vpc \
                  --query "Vpcs[0].VpcId" --output text 2>/dev/null)
       if [ "$VPC_ID" != "None" ] && [ -n "$VPC_ID" ]; then
         for SG_ID in $(aws ec2 describe-security-groups --no-cli-pager \

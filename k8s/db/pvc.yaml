@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
-  namespace: sqlinj
+  namespace: dsl
 spec:
   # Explicit storageClassName so the PVC is unambiguous about which
   # provisioner it wants (the EBS CSI driver via the gp3 StorageClass we

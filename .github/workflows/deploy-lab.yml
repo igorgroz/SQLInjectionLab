@@ -28,7 +28,7 @@ concurrency:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
   TF_VERSION: "1.10.5"
-  CLUSTER_NAME: sqlinj-eks
+  CLUSTER_NAME: dsl-eks
 
 jobs:
   deploy:
@@ -125,9 +125,9 @@ jobs:
           kubectl apply -f k8s/eso/externalsecret-db-password.yaml
           kubectl apply -f k8s/eso/externalsecret-jwt-secret.yaml
           kubectl get clustersecretstore aws-secrets-manager
-          kubectl -n sqlinj wait externalsecret/db-password --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
-          kubectl -n sqlinj wait externalsecret/jwt-secret --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
-          kubectl -n sqlinj get externalsecret,secret
+          kubectl -n dsl wait externalsecret/db-password --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
+          kubectl -n dsl wait externalsecret/jwt-secret --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=5m
+          kubectl -n dsl get externalsecret,secret
 
       - name: Deploy database
         run: |
@@ -136,7 +136,7 @@ jobs:
           kubectl apply -f k8s/db/pvc.yaml
           kubectl apply -f k8s/db/service.yaml
           kubectl apply -f k8s/db/deployment.yaml
-          kubectl -n sqlinj rollout status deployment/db --timeout=10m
+          kubectl -n dsl rollout status deployment/db --timeout=10m
 
       - name: Deploy backend
         run: |
@@ -144,28 +144,28 @@ jobs:
           kubectl apply -f k8s/backend/configmap.yaml
           kubectl apply -f k8s/backend/service.yaml
           kubectl apply -f k8s/backend/deployment.yaml
-          kubectl -n sqlinj rollout status deployment/backend --timeout=10m
+          kubectl -n dsl rollout status deployment/backend --timeout=10m
 
       - name: Deploy frontend
         run: |
           kubectl apply -f k8s/frontend/service.yaml
           kubectl apply -f k8s/frontend/deployment.yaml
-          kubectl -n sqlinj rollout status deployment/frontend --timeout=10m
+          kubectl -n dsl rollout status deployment/frontend --timeout=10m
 
       - name: Optionally override backend and frontend image tags
         if: ${{ inputs.image_tag != '' }}
         run: |
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
           REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          kubectl -n sqlinj set image deployment/backend  backend="${REGISTRY}/sqlinj-backend:${{ inputs.image_tag }}"
-          kubectl -n sqlinj set image deployment/frontend frontend="${REGISTRY}/sqlinj-frontend:${{ inputs.image_tag }}"
-          kubectl -n sqlinj rollout status deployment/backend --timeout=10m
-          kubectl -n sqlinj rollout status deployment/frontend --timeout=10m
+          kubectl -n dsl set image deployment/backend  backend="${REGISTRY}/dsl-backend:${{ inputs.image_tag }}"
+          kubectl -n dsl set image deployment/frontend frontend="${REGISTRY}/dsl-frontend:${{ inputs.image_tag }}"
+          kubectl -n dsl rollout status deployment/backend --timeout=10m
+          kubectl -n dsl rollout status deployment/frontend --timeout=10m
 
       - name: Apply ingress
         run: |
           kubectl apply -f k8s/ingress.yaml
-          kubectl -n sqlinj annotate ingress sqlinj-ingress \
+          kubectl -n dsl annotate ingress dsl-ingress \
             alb.ingress.kubernetes.io/inbound-cidrs="${{ inputs.allowed_cidr }}" \
             --overwrite
 
@@ -173,7 +173,7 @@ jobs:
         id: alb
         run: |
           for i in $(seq 1 90); do
-            HOSTNAME="$(kubectl -n sqlinj get ingress sqlinj-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            HOSTNAME="$(kubectl -n dsl get ingress dsl-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
             if [ -n "${HOSTNAME}" ]; then
               echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
               echo "ALB hostname: ${HOSTNAME}"
@@ -184,16 +184,20 @@ jobs:
           echo "::error::Timed out waiting for ALB hostname"
           exit 1
 
-      - name: Smoke test ALB health endpoint
+      - name: Smoke test backend health (via kubectl port-forward)
+        # The ALB inbound-cidrs is locked to the operator's IP — the GitHub
+        # Actions runner can never reach it externally. Instead, port-forward
+        # directly to the backend pod and hit /health from inside the runner.
         run: |
-          for i in $(seq 1 30); do
-            if curl -kfsS "https://${{ steps.alb.outputs.hostname }}/health" >/dev/null; then
-              echo "ALB health endpoint is reachable"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::warning::ALB health endpoint did not return 200 yet"
+          kubectl -n dsl port-forward svc/backend 18080:5001 &
+          PF_PID=$!
+          sleep 5
+          if curl -fsS http://localhost:18080/health >/dev/null; then
+            echo "Backend health check passed"
+          else
+            echo "::warning::Backend health check did not return 200 — check pod logs"
+          fi
+          kill $PF_PID 2>/dev/null || true
 
       - name: Summarise deployment
         run: |

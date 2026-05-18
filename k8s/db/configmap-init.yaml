@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: db-init-sql
-  namespace: sqlinj
+  namespace: dsl
 data:
   01-init.sql: |
     --

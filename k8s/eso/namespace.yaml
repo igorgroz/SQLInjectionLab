@@ -2,11 +2,11 @@
 # Namespaces required by Phase 3b-3.
 #
 # external-secrets:  Where the ESO operator runs. The IRSA trust policy on
-#                    sqlinj-eks-eso-role pins to the SA in this namespace,
+#                    dsl-eks-eso-role pins to the SA in this namespace,
 #                    so this name CANNOT be changed without re-applying
 #                    Terraform.
 #
-# sqlinj:            Where the application runs and where ESO will materialize
+# dsl:            Where the application runs and where ESO will materialize
 #                    K8s Secrets. Already used by existing minikube manifests;
 #                    declared here for completeness so a fresh cluster can be
 #                    bootstrapped from this directory alone.
@@ -27,9 +27,9 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: sqlinj
+  name: dsl
   labels:
-    name: sqlinj
+    name: dsl
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/enforce-version: latest
     # NOTE: app namespace uses "baseline" not "restricted" because the

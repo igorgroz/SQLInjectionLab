@@ -26,7 +26,7 @@
 #
 # That keeps this file cluster-portable. clusterName is stable across
 # recreates, region is stable, so they stay hardcoded.
-clusterName: sqlinj-eks
+clusterName: dsl-eks
 region: ap-southeast-2
 # vpcId: set via --set on the helm install command, NOT here
 
@@ -38,7 +38,7 @@ serviceAccount:
   create: true
   name: aws-load-balancer-controller
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/sqlinj-eks-alb-controller-role
+    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/dsl-eks-alb-controller-role
 
 # --- Replicas -----------------------------------------------------------------
 # Lab: single replica is fine. Prod: 2+ across distinct AZs with

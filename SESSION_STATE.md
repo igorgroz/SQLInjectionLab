@@ -16,11 +16,13 @@ mirror ECR → attest → deploy (cluster-aware). Gates auto-approve via
 stack from scratch via workflow_dispatch.
 
 ## Last commit
-`fix: replace ALB smoke test with kubectl port-forward health check` (May 15 2026)
+`chore(rename): sqlinj → dsl across all live repo files` (May 18 2026)
 
 ## Resolved this session
-- **Rename pass complete** (repo-text tokens). Live AWS identifiers remain
-  as deliberate separate sub-pass.
+- **Rename pass complete (repo-text + live files)** — all `sqlinj` tokens
+  replaced with `dsl` across k8s manifests, Terraform, Helm values,
+  GitHub Actions workflows, and bin scripts. Live AWS infra identifiers
+  (ECR repos, IRSA roles, SM paths) rename on next cluster spin-up.
 - **GitHub Actions OIDC role** (`devseclab-github-actions`) created in
   infra-base via Terraform. Survives nightly destroy. ARN set as
   `AWS_GITHUB_ACTIONS_ROLE_ARN` repo secret.
@@ -76,22 +78,26 @@ stack from scratch via workflow_dispatch.
 `.DS_Store` — add to `.gitignore` (currently showing as modified every session).
 
 ## Next actions — roadmap (ordered)
-1. **Live AWS identifier rename sub-pass** — namespace `sqlinj`, cluster
-   `sqlinj-eks`, ECR repos, IRSA roles, SM secret paths `sqlinj/backend/*`.
-   Ripples into running infra; do during next cluster spin-up.
+1. **Live AWS infra rename** — ECR repos, IRSA roles (`dsl-eks-eso-role`,
+   `dsl-eks-backend-role`), SM secret paths `dsl/backend/*`. Repo already
+   updated; AWS resources recreate on next spin-up (ECR needs explicit rename
+   or delete+recreate — images are in GHCR as fallback).
 2. **Kyverno cosigned admission policy** (#10) — enforce `vuln-signoff/v1`
    attestation at admission time. Consumer side of the attestation work.
-3. **NetworkPolicies + PSS** on the app namespace.
-4. **Node-group hop-limit fix** (#1 sub-issue) — drop vpcId pin from
-   values.yaml entirely via cluster-info ConfigMap if desired.
-5. **Prototype track — "very secure app".** CloudFormation, API Gateway,
-   service mesh (mTLS + east-west policy).
+3. **NetworkPolicies + PSS** on the `dsl` namespace.
+4. **Node-group hop-limit fix** (#1 sub-issue) — cluster-info ConfigMap from
+   Terraform VPC output; drop manual `--set vpcId=...` from deploy-lab.yml.
+5. **Enterprise platform track** — Kong ingress controller, Istio service mesh
+   (mTLS east-west, AuthorizationPolicy), CloudFront + WAF. Microservices
+   split of the app (or swap in a reference workload) to give the mesh
+   meaningful traffic to demonstrate.
 
 ## Still-open work (fold in as capacity allows)
 - Kyverno cosigned admission policy verifying `vuln-signoff/v1` (#10).
 - Node-group hop-limit fix, drop vpcId pin (#1 sub-issue).
-- Runtime hardening: NetworkPolicies + PSS on the app namespace.
+- Runtime hardening: NetworkPolicies + PSS on the `dsl` namespace.
 - GoDaddy CNAME update needed after each cluster recreate (new ALB hostname).
+- `.DS_Store` — add to `.gitignore`.
 
 ## Lab teardown state
 **Destroyed.** Preserved in `infra-base`: state backend, nightly-destroy

@@ -19,7 +19,7 @@
 # as a sibling `<key>.tflock` object next to the state file inside the bucket.
 terraform {
   backend "s3" {
-    bucket       = "sqlinj-tfstate-510151297987"
+    bucket       = "dsl-tfstate-510151297987"
     key          = "infra-lab/terraform.tfstate"
     region       = "ap-southeast-2"
     use_lockfile = true

@@ -4,8 +4,8 @@
 #
 # Run this ONCE before running `terraform init` in either infra-base or
 # infra-lab. It creates:
-#   - S3 bucket:       sqlinj-tfstate-<ACCOUNT_ID>   (versioned, encrypted)
-#   - DynamoDB table:  sqlinj-tfstate-lock            (state locking)
+#   - S3 bucket:       dsl-tfstate-<ACCOUNT_ID>   (versioned, encrypted)
+#   - DynamoDB table:  dsl-tfstate-lock            (state locking)
 #
 # Security notes:
 #   - Bucket versioning enables recovery from accidental state corruption
@@ -29,8 +29,8 @@ fi
 
 REGION="ap-southeast-2"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-BUCKET_NAME="sqlinj-tfstate-${ACCOUNT_ID}"
-DYNAMODB_TABLE="sqlinj-tfstate-lock"
+BUCKET_NAME="dsl-tfstate-${ACCOUNT_ID}"
+DYNAMODB_TABLE="dsl-tfstate-lock"
 
 echo "→ AWS Account:    ${ACCOUNT_ID}"
 echo "→ Region:         ${REGION}"
@@ -76,7 +76,7 @@ else
 
     # Enable access logging (production best practice — who accessed state when)
     # Omitted here to avoid creating a second logging bucket in the lab.
-    # Production: create a separate sqlinj-tfstate-logs-ACCOUNT_ID bucket and
+    # Production: create a separate dsl-tfstate-logs-ACCOUNT_ID bucket and
     # configure logging to it.
 
     echo "✓ S3 bucket created and hardened"
@@ -97,7 +97,7 @@ else
       --region "${REGION}" \
       --tags \
         Key=Environment,Value=lab \
-        Key=Project,Value=sqlinj \
+        Key=Project,Value=dsl \
         Key=ManagedBy,Value=terraform \
         Key=Component,Value=infra-base
 

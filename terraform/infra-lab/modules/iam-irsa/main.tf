@@ -103,7 +103,7 @@ data "aws_iam_policy_document" "eso_permissions" {
       "secretsmanager:ListSecrets",
     ]
     resources = [
-      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:sqlinj/*"
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:dsl/*"
     ]
   }
 }
@@ -163,7 +163,7 @@ data "aws_iam_policy_document" "backend_permissions" {
       "secretsmanager:DescribeSecret",
     ]
     resources = [
-      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:sqlinj/backend/*"
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:dsl/backend/*"
     ]
   }
 }
@@ -184,32 +184,32 @@ resource "aws_iam_role_policy" "backend" {
 # Phase 3b will configure ESO to sync these into K8s Secrets.
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name        = "sqlinj/backend/db-password"
-  description = "PostgreSQL password for the sqlinj backend application"
+  name        = "dsl/backend/db-password"
+  description = "PostgreSQL password for the dsl backend application"
 
   # 30-day recovery window before permanent deletion.
   # Terraform destroy sets this to 0 for immediate deletion (fine for lab).
   recovery_window_in_days = 0
 
   tags = merge(var.tags, {
-    Name = "sqlinj-db-password"
+    Name = "dsl-db-password"
   })
 }
 
 resource "aws_secretsmanager_secret" "jwt_secret" {
-  name        = "sqlinj/backend/jwt-secret"
-  description = "JWT signing secret for the sqlinj backend"
+  name        = "dsl/backend/jwt-secret"
+  description = "JWT signing secret for the dsl backend"
 
   recovery_window_in_days = 0
 
   tags = merge(var.tags, {
-    Name = "sqlinj-jwt-secret"
+    Name = "dsl-jwt-secret"
   })
 }
 
 # Placeholder versions — set to "PLACEHOLDER" so the secret exists.
 # In Phase 3b, you'll run:
-#   aws secretsmanager put-secret-value --secret-id sqlinj/backend/db-password \
+#   aws secretsmanager put-secret-value --secret-id dsl/backend/db-password \
 #     --secret-string "your-actual-password"
 # This should be done manually — never via Terraform or committed to the repo.
 

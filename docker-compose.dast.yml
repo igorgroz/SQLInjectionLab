@@ -25,7 +25,7 @@ services:
   backend:
     # Pull the image just pushed and signed by the push-and-sign job.
     # The BACKEND_IMAGE env var is set by the CI step.
-    image: ${BACKEND_IMAGE:-sqlinj-backend:latest}
+    image: ${BACKEND_IMAGE:-dsl-backend:latest}
     environment:
       # Switch auth middleware to local JWT validation (bypass Entra ID JWKS)
       AUTH_MODE:          dast
@@ -70,7 +70,7 @@ services:
     # No ports override here — base docker-compose.yml already has 3000:3000.
     # Adding 3000:80 here would merge into a duplicate host-port bind and fail.
     # ZAP scans the backend only (localhost:5001), so frontend port is irrelevant.
-    image: ${FRONTEND_IMAGE:-sqlinj-frontend:latest}
+    image: ${FRONTEND_IMAGE:-dsl-frontend:latest}
 
   db:
     # Ephemeral — no named volume; torn down with docker compose down -v

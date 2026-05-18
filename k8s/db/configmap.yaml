@@ -8,7 +8,7 @@
 # IMPORTANT: POSTGRES_PASSWORD is consumed via env-from-Secret in the
 # Deployment, NOT from this ConfigMap. The single source of truth for the
 # DB password is `db-password` Secret (synced by ESO from AWS Secrets
-# Manager `sqlinj/backend/db-password`). Both this DB pod AND the backend
+# Manager `dsl/backend/db-password`). Both this DB pod AND the backend
 # pod read from the same Secret — so when ESO rotates, both sides see
 # the same new value.
 # =============================================================================
@@ -16,7 +16,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: db-config
-  namespace: sqlinj
+  namespace: dsl
 data:
   POSTGRES_DB: "devseclab"
   POSTGRES_USER: "sql_lab_user"

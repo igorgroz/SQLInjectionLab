@@ -4,7 +4,7 @@
 # What goes here vs in a Secret:
 #   ConfigMap: hostnames, ports, db name, user name, JWT issuer/audience,
 #              algorithm choices, expiration windows. Visible to anyone
-#              with `kubectl get cm -n sqlinj` — but none of these
+#              with `kubectl get cm -n dsl` — but none of these
 #              values give an attacker capability on their own.
 #   Secret:    DB_PASSWORD and JWT_SECRET. Sourced from AWS Secrets Manager
 #              via ESO ExternalSecrets, NOT defined here.
@@ -16,7 +16,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: backend-config
-  namespace: sqlinj
+  namespace: dsl
 data:
   # Database connection (in-cluster postgres)
   DB_HOST: "db"

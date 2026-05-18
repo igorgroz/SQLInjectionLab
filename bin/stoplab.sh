@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AWS_REGION="${AWS_REGION:-ap-southeast-2}"
-CLUSTER_NAME="${CLUSTER_NAME:-sqlinj-eks}"
+CLUSTER_NAME="${CLUSTER_NAME:-dsl-eks}"
 
 log() {
   printf '\n==> %s\n' "$1"

@@ -25,7 +25,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 INGRESS="${ROOT}/k8s/ingress.yaml"
-NS="sqlinj"
+NS="dsl"
 
 YES=false
 EXPLICIT=""
@@ -97,7 +97,7 @@ echo "Waiting 10s for ALBC reconcile..."
 sleep 10
 
 SG_ID="$(aws elbv2 describe-load-balancers --region ap-southeast-2 \
-          --names k8s-sqlinj-sqlinjin-856dc041e7 \
+          --names k8s-dsl-dslin-856dc041e7 \
           --query 'LoadBalancers[0].SecurityGroups[0]' --output text 2>/dev/null || true)"
 
 if [[ -n "$SG_ID" && "$SG_ID" != "None" ]]; then

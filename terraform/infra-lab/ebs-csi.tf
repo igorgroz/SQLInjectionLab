@@ -58,7 +58,7 @@ resource "aws_iam_role" "ebs_csi" {
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_trust.json
 
   tags = {
-    Project   = "sqlinj"
+    Project   = "dsl"
     ManagedBy = "terraform"
     Component = "ebs-csi"
   }
@@ -85,7 +85,7 @@ resource "aws_eks_addon" "ebs_csi" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = {
-    Project   = "sqlinj"
+    Project   = "dsl"
     ManagedBy = "terraform"
     Component = "ebs-csi"
   }

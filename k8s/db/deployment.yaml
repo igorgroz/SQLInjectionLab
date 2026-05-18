@@ -13,7 +13,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: db
-  namespace: sqlinj
+  namespace: dsl
 spec:
   replicas: 1
   selector:
@@ -40,7 +40,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: db-password   # synced by ESO from sqlinj/backend/db-password
+                  name: db-password   # synced by ESO from dsl/backend/db-password
                   key: password
 
           volumeMounts:

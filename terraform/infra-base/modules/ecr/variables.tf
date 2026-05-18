@@ -14,8 +14,8 @@ variable "repositories" {
     scan_on_push         = optional(bool, true)
   }))
   default = {
-    "sqlinj-frontend" = {}
-    "sqlinj-backend"  = {}
+    "dsl-frontend" = {}
+    "dsl-backend"  = {}
   }
 }
 

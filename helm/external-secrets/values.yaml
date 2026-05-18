@@ -15,7 +15,7 @@
 #     --wait --timeout 5m
 #
 # IRSA wiring:
-#   - The IAM role `sqlinj-eks-eso-role` (created by terraform/infra-lab/modules/iam-irsa)
+#   - The IAM role `dsl-eks-eso-role` (created by terraform/infra-lab/modules/iam-irsa)
 #     trusts the OIDC subject `system:serviceaccount:external-secrets:external-secrets-sa`.
 #   - Therefore: the operator's ServiceAccount MUST be named exactly
 #     `external-secrets-sa` and live in the `external-secrets` namespace.
@@ -24,9 +24,9 @@
 #     Only the controller talks to AWS, so only the controller's SA gets the IRSA
 #     annotation. The webhook + cert-controller SAs are left as chart defaults.
 #
-# Permissions reminder (in sqlinj-eks-eso-role):
+# Permissions reminder (in dsl-eks-eso-role):
 #   secretsmanager:GetSecretValue, DescribeSecret, ListSecrets
-#   resource ARN: arn:aws:secretsmanager:ap-southeast-2:510151297987:secret:sqlinj/*
+#   resource ARN: arn:aws:secretsmanager:ap-southeast-2:510151297987:secret:dsl/*
 # =============================================================================
 
 # --- Controller ServiceAccount (IRSA target) ---------------------------------
@@ -34,7 +34,7 @@ serviceAccount:
   create: true
   name: external-secrets-sa
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/sqlinj-eks-eso-role
+    eks.amazonaws.com/role-arn: arn:aws:iam::510151297987:role/dsl-eks-eso-role
 
 # --- CRDs --------------------------------------------------------------------
 # The chart can install the CRDs for you. Set to false if you manage CRDs

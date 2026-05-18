@@ -112,11 +112,11 @@ output "next_steps" {
          --secret-string "your-jwt-signing-secret"
 
     4. Enable the nightly destroy rule when ready:
-       aws events enable-rule --name sqlinj-nightly-destroy
+       aws events enable-rule --name dsl-nightly-destroy
 
     5. ECR image URLs (repos live in infra-base now, persist across teardowns):
-       Frontend: ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sqlinj-frontend
-       Backend:  ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/sqlinj-backend
+       Frontend: ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/dsl-frontend
+       Backend:  ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/dsl-backend
 
     ============================================================
   EOT

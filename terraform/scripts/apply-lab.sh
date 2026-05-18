@@ -40,4 +40,4 @@ terraform apply ${AUTO_APPROVE} -input=false tfplan
 
 echo ""
 echo "✓ infra-lab applied. Retrieve kubeconfig with:"
-echo "  aws eks update-kubeconfig --region ap-southeast-2 --name sqlinj-eks"
+echo "  aws eks update-kubeconfig --region ap-southeast-2 --name dsl-eks"

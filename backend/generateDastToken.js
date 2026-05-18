@@ -42,7 +42,7 @@ const token = jwt.sign(claims, secret, {
   algorithm:  "HS256",
   expiresIn:  "8h",               // long enough for a CI pipeline run
   issuer:     "dast-ci",
-  audience:   "sqlinj-backend",
+  audience:   "dsl-backend",
 });
 
 console.log("\n=== DAST Bearer Token ===");

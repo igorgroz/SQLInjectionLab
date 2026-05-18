@@ -25,7 +25,7 @@ variable "aws_region" {
 variable "app_namespace" {
   description = "Kubernetes namespace where the application runs"
   type        = string
-  default     = "sqlinj"
+  default     = "dsl"
 }
 
 variable "eso_namespace" {
@@ -43,7 +43,7 @@ variable "eso_service_account" {
 variable "backend_service_account" {
   description = "Kubernetes ServiceAccount name for the backend application"
   type        = string
-  default     = "sqlinj-backend-sa"
+  default     = "dsl-backend-sa"
 }
 
 variable "tags" {

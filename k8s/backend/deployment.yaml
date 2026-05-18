@@ -4,7 +4,7 @@
 # Changes from the minikube version:
 #   - image: ECR-hosted, pinned to git SHA 6113a7de... (signed via cosign)
 #   - imagePullPolicy: IfNotPresent (the default; explicit Never was for minikube)
-#   - serviceAccountName: sqlinj-backend-sa (provides IRSA identity for AWS calls)
+#   - serviceAccountName: dsl-backend-sa (provides IRSA identity for AWS calls)
 #   - envFrom: split into ConfigMap (non-sensitive) + explicit valueFrom for
 #     ESO-managed Secrets (DB_PASSWORD, JWT_SECRET)
 # =============================================================================
@@ -12,7 +12,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: sqlinj
+  namespace: dsl
 spec:
   replicas: 1
   selector:
@@ -23,10 +23,10 @@ spec:
       labels:
         app: backend
     spec:
-      serviceAccountName: sqlinj-backend-sa
+      serviceAccountName: dsl-backend-sa
       containers:
         - name: backend
-          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/sqlinj-backend:f814ac7a93cef1e0619c456193c93c13d4cda863
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-backend:f814ac7a93cef1e0619c456193c93c13d4cda863
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
@@ -43,12 +43,12 @@ spec:
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: db-password   # synced by ESO from sqlinj/backend/db-password
+                  name: db-password   # synced by ESO from dsl/backend/db-password
                   key: password
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: jwt-secret    # synced by ESO from sqlinj/backend/jwt-secret
+                  name: jwt-secret    # synced by ESO from dsl/backend/jwt-secret
                   key: secret
 
           readinessProbe:

@@ -35,7 +35,7 @@ provider "aws" {
   default_tags {
     tags = {
       Environment = "lab"
-      Project     = "sqlinj"
+      Project     = "dsl"
       ManagedBy   = "terraform"
       Component   = "infra-base"
       AutoDestroy = "false"
