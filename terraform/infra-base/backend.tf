@@ -27,7 +27,7 @@
 
 terraform {
   backend "s3" {
-    bucket       = "dsl-tfstate-510151297987"
+    bucket       = "sqlinj-tfstate-510151297987"  # real bucket name — rename is a separate infra task
     key          = "infra-base/terraform.tfstate"
     region       = "ap-southeast-2"
     use_lockfile = true

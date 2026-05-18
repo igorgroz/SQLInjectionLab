@@ -18,7 +18,7 @@ data "aws_region" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   region       = data.aws_region.current.name
-  state_bucket = "dsl-tfstate-${local.account_id}"
+  state_bucket = "sqlinj-tfstate-${local.account_id}"  # real bucket name — rename is a separate infra task
 }
 
 # =============================================================================
