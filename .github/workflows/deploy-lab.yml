@@ -133,13 +133,23 @@ jobs:
         run: |
           helm repo add kyverno https://kyverno.github.io/kyverno/
           helm repo update kyverno
-          # --no-hooks bypasses Kyverno's post-upgrade hook Jobs (kyverno-clean-reports
-          # and friends). These hooks run internal report cleanup and are safe to skip
-          # in a lab — they are not required for the admission webhook to function.
-          # Without --no-hooks, a prior failed deploy-lab.yml run leaves a stuck hook
-          # Job in the kyverno namespace that blocks every subsequent helm upgrade.
+          # Always do a clean Kyverno install to avoid stale TLS certificates.
+          #
+          # MutatingWebhookConfigurations and ValidatingWebhookConfigurations are
+          # cluster-scoped and survive namespace deletion. After a reinstall the new
+          # pods generate fresh TLS certs, but the old webhook configs still carry the
+          # prior caBundle — every webhook call then fails the TLS handshake with
+          # "context deadline exceeded". The fix is to delete these cluster-scoped
+          # resources explicitly before reinstalling so Kyverno creates them fresh.
+          helm uninstall kyverno -n kyverno 2>/dev/null || true
+          kubectl delete mutatingwebhookconfigurations \
+            --selector="app.kubernetes.io/part-of=kyverno" --ignore-not-found=true 2>/dev/null || true
+          kubectl delete validatingwebhookconfigurations \
+            --selector="app.kubernetes.io/part-of=kyverno" --ignore-not-found=true 2>/dev/null || true
+          kubectl delete namespace kyverno --ignore-not-found=true 2>/dev/null || true
+          kubectl wait --for=delete namespace/kyverno --timeout=3m 2>/dev/null || true
           # Single-replica: sufficient for the lab; use 3 replicas in production for HA.
-          helm upgrade --install kyverno kyverno/kyverno \
+          helm install kyverno kyverno/kyverno \
             --namespace kyverno \
             --create-namespace \
             --version 3.2.6 \
@@ -147,7 +157,6 @@ jobs:
             --set backgroundController.replicas=1 \
             --set cleanupController.replicas=1 \
             --set reportsController.replicas=1 \
-            --no-hooks \
             --wait --timeout=10m
           kubectl -n kyverno get pods
 
