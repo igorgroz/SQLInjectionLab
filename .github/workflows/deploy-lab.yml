@@ -151,27 +151,37 @@ jobs:
           kubectl wait --for=delete namespace/kyverno --timeout=3m 2>/dev/null || true
           # Chart values (HA, webhook timeout, memory headroom, kubectl image
           # swap for the deprecated bitnami one) live in helm/kyverno/values.yaml
-          # with full rationale comments. The SA's IRSA annotation is injected
-          # here from a Terraform output because the role ARN isn't known until
-          # the infra-lab apply has run. See KYVERNO_ECR_VERIFY_FIX.md.
+          # with full rationale comments. The SA's IRSA annotation is applied
+          # via kubectl below — helm --set with a dotted annotation key
+          # (eks.amazonaws.com/role-arn) is brittle across Helm/shell escape
+          # combinations and silently produced an unannotated SA in CI.
+          # See KYVERNO_ECR_VERIFY_FIX.md.
           helm install kyverno kyverno/kyverno \
             --namespace kyverno \
             --create-namespace \
             --version 3.2.6 \
             -f helm/kyverno/values.yaml \
-            --set admissionController.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ steps.tf.outputs.kyverno_ecr_read_role_arn }}" \
             --wait --timeout=10m
           kubectl -n kyverno get pods
-          # Confirm the EKS Pod Identity Webhook mutated the admission-controller
-          # pod with the IRSA env vars. We read them from the pod spec via the
-          # API server rather than `kubectl exec env` — the Kyverno container is
-          # distroless and has no shell or coreutils to exec.
-          #
-          # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE are injected by the EKS
-          # Pod Identity Webhook ONLY when the SA carries the
-          # eks.amazonaws.com/role-arn annotation. If either is missing here,
-          # the SA annotation didn't take effect and cosign verify will time
-          # out the admission webhook with "context canceled" on ECR /v2/.
+
+          # Annotate the admission-controller SA with the IRSA role ARN. The
+          # EKS Pod Identity Webhook reads this annotation at pod admission
+          # time and injects AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE plus
+          # a projected service-account token. Without it, cosign in Kyverno
+          # has no AWS credentials, the ECR /v2/ auth challenge loop hangs
+          # waiting on IMDS, and the admission webhook times out.
+          kubectl -n kyverno annotate sa kyverno-admission-controller \
+            eks.amazonaws.com/role-arn=${{ steps.tf.outputs.kyverno_ecr_read_role_arn }} \
+            --overwrite
+
+          # Existing pods were admitted BEFORE the SA was annotated, so the
+          # webhook didn't inject IRSA env on them. Rolling restart forces
+          # re-admission so the new pods come up with the env wired in.
+          kubectl -n kyverno rollout restart deploy/kyverno-admission-controller
+          kubectl -n kyverno rollout status  deploy/kyverno-admission-controller --timeout=3m
+
+          # Now verify. We read env from the pod spec via the API server
+          # (the Kyverno container is distroless — no shell to exec into).
           POD_ENV=$(kubectl -n kyverno get pod \
             -l app.kubernetes.io/component=admission-controller \
             -o jsonpath='{range .items[0].spec.containers[?(@.name=="kyverno")].env[*]}{.name}{"\n"}{end}')
@@ -183,6 +193,8 @@ jobs:
           done
           if [ -n "$MISSING" ]; then
             echo "::error::IRSA env vars missing on Kyverno pod:$MISSING - admission webhook will time out on cosign verify. See KYVERNO_ECR_VERIFY_FIX.md."
+            echo "::error::Current SA annotations:"
+            kubectl -n kyverno get sa kyverno-admission-controller -o jsonpath='{.metadata.annotations}'
             exit 1
           fi
           echo "IRSA env vars present on admission-controller pod."
