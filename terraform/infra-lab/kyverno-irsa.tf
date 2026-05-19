@@ -64,7 +64,7 @@ data "aws_iam_policy_document" "kyverno_ecr_read_trust" {
 
 resource "aws_iam_role" "kyverno_ecr_read" {
   name               = "${var.cluster_name}-kyverno-ecr-read"
-  description        = "IRSA role for Kyverno admission controller — ECR read for cosign signature/attestation fetches"
+  description        = "IRSA role for Kyverno admission controller - ECR read for cosign signature/attestation fetches"
   assume_role_policy = data.aws_iam_policy_document.kyverno_ecr_read_trust.json
 
   tags = {
@@ -139,6 +139,6 @@ resource "aws_iam_role_policy_attachment" "kyverno_ecr_read" {
 # -----------------------------------------------------------------------------
 
 output "kyverno_ecr_read_role_arn" {
-  description = "IRSA role ARN for the Kyverno admission controller — annotate the SA with this"
+  description = "IRSA role ARN for the Kyverno admission controller - annotate the SA with this"
   value       = aws_iam_role.kyverno_ecr_read.arn
 }
