@@ -162,12 +162,30 @@ jobs:
             --set admissionController.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ steps.tf.outputs.kyverno_ecr_read_role_arn }}" \
             --wait --timeout=10m
           kubectl -n kyverno get pods
-          # Confirm IRSA env is actually projected into the pod — otherwise
-          # cosign verify will silently fall back to anonymous and time out
-          # the admission webhook with "context canceled" on ECR /v2/.
-          kubectl -n kyverno exec deploy/kyverno-admission-controller -- \
-            env | grep -E '^AWS_(ROLE_ARN|WEB_IDENTITY_TOKEN_FILE)' \
-            || { echo "::error::IRSA env vars not present on Kyverno pod — admission webhook will time out on cosign verify. See KYVERNO_ECR_VERIFY_FIX.md."; exit 1; }
+          # Confirm the EKS Pod Identity Webhook mutated the admission-controller
+          # pod with the IRSA env vars. We read them from the pod spec via the
+          # API server rather than `kubectl exec env` — the Kyverno container is
+          # distroless and has no shell or coreutils to exec.
+          #
+          # AWS_ROLE_ARN + AWS_WEB_IDENTITY_TOKEN_FILE are injected by the EKS
+          # Pod Identity Webhook ONLY when the SA carries the
+          # eks.amazonaws.com/role-arn annotation. If either is missing here,
+          # the SA annotation didn't take effect and cosign verify will time
+          # out the admission webhook with "context canceled" on ECR /v2/.
+          POD_ENV=$(kubectl -n kyverno get pod \
+            -l app.kubernetes.io/component=admission-controller \
+            -o jsonpath='{range .items[0].spec.containers[?(@.name=="kyverno")].env[*]}{.name}{"\n"}{end}')
+          echo "Kyverno admission-controller env keys:"
+          echo "$POD_ENV"
+          MISSING=""
+          for VAR in AWS_ROLE_ARN AWS_WEB_IDENTITY_TOKEN_FILE; do
+            echo "$POD_ENV" | grep -qx "$VAR" || MISSING="$MISSING $VAR"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::IRSA env vars missing on Kyverno pod:$MISSING - admission webhook will time out on cosign verify. See KYVERNO_ECR_VERIFY_FIX.md."
+            exit 1
+          fi
+          echo "IRSA env vars present on admission-controller pod."
 
       - name: Wait for Kyverno webhook endpoint
         run: |
