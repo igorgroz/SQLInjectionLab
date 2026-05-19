@@ -2,7 +2,7 @@
 # Backend Deployment — EKS edition
 #
 # Changes from the minikube version:
-#   - image: ECR-hosted, pinned to git SHA 6113a7de... (signed via cosign)
+#   - image: ECR-hosted, pinned to git SHA d90ba8a6... (signed + attested via cosign in ECR)
 #   - imagePullPolicy: IfNotPresent (the default; explicit Never was for minikube)
 #   - serviceAccountName: dsl-backend-sa (provides IRSA identity for AWS calls)
 #   - envFrom: split into ConfigMap (non-sensitive) + explicit valueFrom for
@@ -26,7 +26,7 @@ spec:
       serviceAccountName: dsl-backend-sa
       containers:
         - name: backend
-          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-backend:af166356501ace2dce3b3655aefda8b4eff5cf51
+          image: 510151297987.dkr.ecr.ap-southeast-2.amazonaws.com/dsl-backend:d90ba8a689c0935115549d11872f0f040001af9d
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5001
