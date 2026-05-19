@@ -1,0 +1,109 @@
+# =============================================================================
+# helm/kyverno/values.yaml — Kyverno chart values for the dsl-eks lab
+#
+# Chart: kyverno/kyverno 3.2.6
+# Installed by: .github/workflows/deploy-lab.yml — "Install Kyverno" step.
+#
+# WHY THESE VALUES
+#
+#   1. admissionController.replicas: 3
+#      Single-replica Kyverno on a fail-closed mutating webhook is a SPOF.
+#      Any pod restart, OOMKill, node-not-ready, or rolling-restart of the
+#      admission controller blocks every Pod admission cluster-wide until
+#      the pod is back. Three replicas + the PDB below keep at least one
+#      handler ready during disruptions. 1 was the prior lab default; 3 is
+#      cheap on t3.medium and matches what we'd run in prod.
+#
+#   2. admissionController.webhookTimeoutSeconds: 30
+#      The mutating webhook's per-request budget. Cosign keyless verify
+#      against ECR-stored signatures takes 15–25s on a cold cache:
+#        ECR /v2/ auth challenge → STS GetAuthorizationToken → manifest +
+#        .sig + .att fetch → Fulcio chain validate → Rekor SET validate.
+#      The chart default of 10s is below the floor — it fires before
+#      verify completes and the API server cancels the request with
+#      "context deadline exceeded". 30s is the upstream recommendation
+#      when image-verify rules are in play.
+#
+#   3. admissionController.resources.limits.memory: 1Gi
+#      The default 384Mi gets squeezed by the in-process image-verify
+#      cache (1000 entries, 1h TTL) once it warms up against both app
+#      repos. 1Gi gives headroom without being wasteful on t3.medium.
+#
+#   4. admissionController.podDisruptionBudget
+#      Tied to (1): blocks voluntary disruptions that would take all
+#      replicas down simultaneously (drain, autoscaler, rolling node
+#      replacement).
+#
+#   5. cleanupJobs.*.image.repository: registry.k8s.io/kubectl
+#      The Kyverno chart defaults cleanup CronJobs to bitnami/kubectl on
+#      Docker Hub. Bitnami deprecated the legacy free images in mid-2025,
+#      so those tags 404 and the cleanup pods ImagePullBackOff forever.
+#      The k8s upstream image is the right replacement.
+#
+# WHAT'S NOT HERE
+#
+#   - admissionController.serviceAccount.annotations:
+#       eks.amazonaws.com/role-arn: <ARN>
+#     This is injected at install time via `--set` because the role ARN
+#     comes from a Terraform output. See terraform/infra-lab/kyverno-irsa.tf
+#     and the Install Kyverno step in deploy-lab.yml. The IRSA role is what
+#     lets cosign authenticate to ECR for signature artifact fetches.
+#
+#   - validationFailureAction overrides etc. — those belong on the
+#     ClusterPolicy itself (k8s/kyverno/clusterpolicy-image-verify.yaml).
+#
+# REF: KYVERNO_ECR_VERIFY_FIX.md (repo root) — full root-cause analysis.
+# =============================================================================
+
+admissionController:
+  replicas: 3
+  webhookTimeoutSeconds: 30
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  # serviceAccount.annotations.eks.amazonaws.com/role-arn is injected via
+  # --set at install time — see deploy-lab.yml.
+
+backgroundController:
+  replicas: 1
+
+cleanupController:
+  replicas: 1
+
+reportsController:
+  replicas: 1
+
+# Swap bitnami/kubectl (deprecated mid-2025) for the upstream k8s image
+# across every cleanup CronJob the chart ships.
+cleanupJobs:
+  admissionReports:
+    image:
+      registry: registry.k8s.io
+      repository: kubectl
+      tag: v1.30.0
+  clusterAdmissionReports:
+    image:
+      registry: registry.k8s.io
+      repository: kubectl
+      tag: v1.30.0
+  ephemeralReports:
+    image:
+      registry: registry.k8s.io
+      repository: kubectl
+      tag: v1.30.0
+  clusterEphemeralReports:
+    image:
+      registry: registry.k8s.io
+      repository: kubectl
+      tag: v1.30.0
+  updateRequests:
+    image:
+      registry: registry.k8s.io
+      repository: kubectl
+      tag: v1.30.0

@@ -75,6 +75,7 @@ jobs:
           echo "vpc_id=$(terraform output -raw vpc_id)" >> "$GITHUB_OUTPUT"
           echo "albc_role_arn=$(terraform output -raw alb_controller_role_arn)" >> "$GITHUB_OUTPUT"
           echo "backend_role_arn=$(terraform output -raw backend_role_arn)" >> "$GITHUB_OUTPUT"
+          echo "kyverno_ecr_read_role_arn=$(terraform output -raw kyverno_ecr_read_role_arn)" >> "$GITHUB_OUTPUT"
 
       - name: Update kubeconfig
         run: |
@@ -148,17 +149,25 @@ jobs:
             --selector="app.kubernetes.io/part-of=kyverno" --ignore-not-found=true 2>/dev/null || true
           kubectl delete namespace kyverno --ignore-not-found=true 2>/dev/null || true
           kubectl wait --for=delete namespace/kyverno --timeout=3m 2>/dev/null || true
-          # Single-replica: sufficient for the lab; use 3 replicas in production for HA.
+          # Chart values (HA, webhook timeout, memory headroom, kubectl image
+          # swap for the deprecated bitnami one) live in helm/kyverno/values.yaml
+          # with full rationale comments. The SA's IRSA annotation is injected
+          # here from a Terraform output because the role ARN isn't known until
+          # the infra-lab apply has run. See KYVERNO_ECR_VERIFY_FIX.md.
           helm install kyverno kyverno/kyverno \
             --namespace kyverno \
             --create-namespace \
             --version 3.2.6 \
-            --set admissionController.replicas=1 \
-            --set backgroundController.replicas=1 \
-            --set cleanupController.replicas=1 \
-            --set reportsController.replicas=1 \
+            -f helm/kyverno/values.yaml \
+            --set admissionController.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ steps.tf.outputs.kyverno_ecr_read_role_arn }}" \
             --wait --timeout=10m
           kubectl -n kyverno get pods
+          # Confirm IRSA env is actually projected into the pod — otherwise
+          # cosign verify will silently fall back to anonymous and time out
+          # the admission webhook with "context canceled" on ECR /v2/.
+          kubectl -n kyverno exec deploy/kyverno-admission-controller -- \
+            env | grep -E '^AWS_(ROLE_ARN|WEB_IDENTITY_TOKEN_FILE)' \
+            || { echo "::error::IRSA env vars not present on Kyverno pod — admission webhook will time out on cosign verify. See KYVERNO_ECR_VERIFY_FIX.md."; exit 1; }
 
       - name: Wait for Kyverno webhook endpoint
         run: |
