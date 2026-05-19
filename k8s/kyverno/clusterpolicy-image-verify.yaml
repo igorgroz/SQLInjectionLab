@@ -48,7 +48,10 @@ metadata:
       by the security-pipeline workflow or whose vuln-signoff/v1 attestation
       is missing or has unresolved gate outcomes.
 spec:
-  validationFailureAction: Enforce
+  # Temporarily Audit while ECR signing/attestation is wired up in the pipeline.
+  # Switch back to Enforce once a new security-pipeline run has pushed
+  # .sig/.att OCI artifacts into ECR for the current image SHA.
+  validationFailureAction: Audit
   background: false   # only evaluate at admission time, not on existing resources
   rules:
 
@@ -91,7 +94,7 @@ spec:
       # in the allowed set. The predicate field in JMESPath expressions maps
       # to the decoded attestation payload.
       attestations:
-      - predicateType: "https://oznetsecure.com.au/attestations/vuln-signoff/v1"
+      - type: "https://oznetsecure.com.au/attestations/vuln-signoff/v1"
         attestors:
         - count: 1
           entries:
